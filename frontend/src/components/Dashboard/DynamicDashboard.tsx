@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import GridLayout, { Layout } from 'react-grid-layout';
 import { useTheme } from '../../hooks/useTheme';
 import { useAuth } from '../../hooks/useAuth';
 import { apiService } from '../../services/api';
+import 'react-grid-layout/css/styles.css';
 
 interface WidgetConfig {
   layoutId: string;
@@ -44,6 +45,30 @@ const DynamicDashboard: React.FC<DynamicDashboardProps> = ({
   const { theme } = useTheme();
   const { token } = useAuth();
   const [isSaving, setIsSaving] = useState(false);
+  const [containerWidth, setContainerWidth] = useState(1200);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Track container width for responsive grid
+  useEffect(() => {
+    const updateWidth = () => {
+      if (containerRef.current) {
+        setContainerWidth(containerRef.current.offsetWidth);
+      }
+    };
+
+    updateWidth();
+    window.addEventListener('resize', updateWidth);
+
+    const resizeObserver = new ResizeObserver(updateWidth);
+    if (containerRef.current) {
+      resizeObserver.observe(containerRef.current);
+    }
+
+    return () => {
+      window.removeEventListener('resize', updateWidth);
+      resizeObserver.disconnect();
+    };
+  }, []);
 
   // Convert widget configs to react-grid-layout format
   const layouts = useMemo(() => {
@@ -109,7 +134,7 @@ const DynamicDashboard: React.FC<DynamicDashboardProps> = ({
   }, [widgets]);
 
   return (
-    <div className="relative">
+    <div ref={containerRef} className="relative w-full">
       {isSaving && (
         <div className="absolute top-2 right-2 z-50 flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-500 text-white text-sm shadow-lg">
           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
@@ -121,10 +146,10 @@ const DynamicDashboard: React.FC<DynamicDashboardProps> = ({
         className="layout"
         layout={layouts}
         cols={12}
-        rowHeight={100}
-        width={1200}
-        margin={[10, 10]}
-        containerPadding={[10, 10]}
+        rowHeight={80}
+        width={containerWidth}
+        margin={[16, 16]}
+        containerPadding={[0, 0]}
         isDraggable={isEditable}
         isResizable={isEditable}
         onLayoutChange={handleLayoutChange}

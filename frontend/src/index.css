@@ -5,6 +5,33 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Custom Grid Layout Styles */
+.react-grid-layout {
+  position: relative;
+}
+
+.react-grid-item {
+  transition: all 200ms ease;
+  transition-property: left, top, width, height;
+}
+
+.react-grid-item.react-grid-placeholder {
+  background: rgba(59, 130, 246, 0.15);
+  opacity: 0.2;
+  transition-duration: 100ms;
+  z-index: 2;
+  border-radius: 8px;
+}
+
+.react-grid-item > .react-resizable-handle {
+  display: none;
+}
+
+.react-grid-item.resizing {
+  z-index: 100;
+  will-change: width, height;
+}
+
 body {
   @apply font-sans antialiased;
   background-color: #121429;

@@ -2,12 +2,11 @@ import React from 'react';
 import { useTheme } from '../../hooks/useTheme';
 import { DeviceChartData, HierarchyChartData } from '../../services/api';
 import StatsCard from '../Charts/StatsCard';
-import OfrChart from '../Charts/OfrChart';
-import WfrChart from '../Charts/WfrChart';
-import GfrChart from '../Charts/GfrChart';
+import FlowRateCharts from './FlowRateCharts';
 import FractionsChart from './FractionsChart';
 import GVFWLRCharts from './GVFWLRCharts';
 import ProductionMap from './ProductionMap';
+import { AlarmClock } from 'lucide-react';
 
 interface WidgetConfig {
   layoutId: string;
@@ -97,14 +96,38 @@ const WidgetRenderer: React.FC<WidgetRendererProps> = ({
 
         return (
           <div className="h-full">
-            <StatsCard
-              icon={dsConfig.icon || 'clock'}
-              title={dsConfig.title || 'Last Refresh'}
-              value={formattedTime}
-              unit=""
-              color={dsConfig.color || '#d82e75'}
-              isOffline={isDeviceOffline}
-            />
+            <div
+              className={`h-full rounded-lg p-3 md:p-4 transition-all duration-300 overflow-hidden ${
+                theme === 'dark' ? 'bg-[#162345]' : 'bg-white border border-gray-200'
+              }`}
+            >
+              <div className="flex items-center gap-3 mb-3">
+                <div
+                  className="w-8 h-8 md:w-10 md:h-10 rounded-lg flex items-center justify-center shrink-0"
+                  style={{ backgroundColor: dsConfig.color || '#d82e75' }}
+                >
+                  <AlarmClock className="w-4 h-4 md:w-5 md:h-5 text-white" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div
+                    className={`text-xs md:text-sm font-semibold truncate ${
+                      theme === 'dark' ? 'text-[#D0CCD8]' : 'text-[#555758]'
+                    }`}
+                  >
+                    Last Refresh
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-baseline gap-2 mb-1 md:mb-2 min-w-0">
+                <span
+                  className={`font-bold leading-none flex-shrink truncate text-2xl md:text-4xl ${
+                    theme === 'dark' ? 'text-white' : 'text-gray-900'
+                  }`}
+                >
+                  {formattedTime}
+                </span>
+              </div>
+            </div>
           </div>
         );
       }
@@ -124,17 +147,14 @@ const WidgetRenderer: React.FC<WidgetRendererProps> = ({
       );
 
     case 'FlowRateChart':
-      const ChartComponent = dsConfig.metric === 'ofr' ? OfrChart : dsConfig.metric === 'wfr' ? WfrChart : GfrChart;
       return (
-        <div className={`h-full rounded-lg p-4 ${
-          theme === 'dark' ? 'bg-[#162345]' : 'bg-white border border-gray-200'
-        }`}>
-          <ChartComponent
+        <div className="h-full">
+          <FlowRateCharts
             chartData={chartData}
             hierarchyChartData={hierarchyChartData}
             timeRange={timeRange}
             isDeviceOffline={isDeviceOffline}
-            unit={dsConfig.unit || 'l/min'}
+            widgetConfigs={[widget]}
           />
         </div>
       );
@@ -153,7 +173,7 @@ const WidgetRenderer: React.FC<WidgetRendererProps> = ({
 
     case 'GVFWLRChart':
       return (
-        <div className={`h-full rounded-lg p-2 ${
+        <div className={`h-full rounded-lg ${
           theme === 'dark' ? 'bg-[#162345]' : 'bg-white border border-gray-200'
         }`}>
           <GVFWLRCharts

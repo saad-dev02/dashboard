@@ -479,105 +479,34 @@ const DashboardContent: React.FC<DashboardContentProps> = ({
             </div>
           </div>
 
-          {widgetsLoaded && getMetricsWidgets().length > 0 && (
-            <MetricsCards
-              selectedHierarchy={selectedHierarchy}
-              selectedDevice={selectedDevice}
-              chartData={metricsChartData}
-              hierarchyChartData={metricsHierarchyChartData}
-              lastRefresh={lastRefresh}
-              isDeviceOffline={metricsChartData?.device?.status === 'Offline'}
-              widgetConfigs={getMetricsWidgets()}
-            />
-          )}
-
-          {widgetsLoaded && getChartWidgets().length > 0 && (
-            <FlowRateCharts
-              chartData={flowRateChartData}
-              hierarchyChartData={flowRateHierarchyChartData}
-              timeRange={timeRange as '1day' | '7days' | '1month'}
-              isDeviceOffline={flowRateChartData?.device?.status === 'Offline'}
-              widgetConfigs={getChartWidgets()}
-            />
-          )}
-
-          {widgetsLoaded && (
-            <>
-              <div className="hidden md:grid md:grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
-                {getWidgetConfig('FractionsChart') && (
-                  <div className="w-full">
-                    <FractionsChart
-                      chartData={metricsChartData}
-                      hierarchyChartData={metricsHierarchyChartData}
-                      isDeviceOffline={metricsChartData?.device?.status === 'Offline'}
-                      widgetConfig={getWidgetConfig('FractionsChart')}
-                    />
-                  </div>
-                )}
-
-                {getWidgetConfig('GVFWLRChart') && (
-                  <div className="w-full">
-                    <div
-                      className={`rounded-lg p-4 h-full shadow-sm ${
-                        theme === 'dark'
-                          ? 'bg-[#162345]'
-                          : 'bg-white border border-gray-200'
-                      }`}
-                    >
-                      <GVFWLRCharts
-                        chartData={metricsChartData}
-                        hierarchyChartData={metricsHierarchyChartData}
-                        isDeviceOffline={metricsChartData?.device?.status === 'Offline'}
-                        widgetConfig={getWidgetConfig('GVFWLRChart')}
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="md:hidden grid grid-cols-1 gap-4 mb-4">
-                {getWidgetConfig('GVFWLRChart') && (
-                  <div className="w-full">
-                    <div
-                      className={`rounded-lg p-4 h-full shadow-sm ${
-                        theme === 'dark'
-                          ? 'bg-[#162345]'
-                          : 'bg-white border border-gray-200'
-                      }`}
-                    >
-                      <GVFWLRCharts
-                        chartData={metricsChartData}
-                        hierarchyChartData={metricsHierarchyChartData}
-                        isDeviceOffline={metricsChartData?.device?.status === 'Offline'}
-                        widgetConfig={getWidgetConfig('GVFWLRChart')}
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {getWidgetConfig('FractionsChart') && (
-                  <div className="w-full">
-                    <FractionsChart
-                      chartData={metricsChartData}
-                      hierarchyChartData={metricsHierarchyChartData}
-                      isDeviceOffline={metricsChartData?.device?.status === 'Offline'}
-                      widgetConfig={getWidgetConfig('FractionsChart')}
-                    />
-                  </div>
-                )}
-              </div>
-
-              {getWidgetConfig('ProductionMap') && (
-                <div className="mt-4">
-                  <ProductionMap
-                    selectedHierarchy={selectedHierarchy}
+          {widgetsLoaded && widgets.length > 0 ? (
+            <div style={{ width: '100%' }}>
+              <DynamicDashboard
+                dashboardId={dashboardConfig?.id || 'default'}
+                widgets={widgets}
+                isEditable={false}
+              >
+                {(widget) => (
+                  <WidgetRenderer
+                    widget={widget}
+                    chartData={widget.component === 'FlowRateChart' ? flowRateChartData : metricsChartData}
+                    hierarchyChartData={widget.component === 'FlowRateChart' ? flowRateHierarchyChartData : metricsHierarchyChartData}
+                    timeRange={timeRange as '1day' | '7days' | '1month'}
+                    lastRefresh={lastRefresh}
+                    isDeviceOffline={metricsChartData?.device?.status === 'Offline'}
                     selectedDevice={selectedDevice}
-                    widgetConfig={getWidgetConfig('ProductionMap')}
+                    selectedHierarchy={selectedHierarchy}
                   />
-                </div>
-              )}
-            </>
-          )}
+                )}
+              </DynamicDashboard>
+            </div>
+          ) : widgetsLoaded ? (
+            <div className="text-center py-12">
+              <p className={`text-lg ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+                No widgets configured for this dashboard
+              </p>
+            </div>
+          ) : null}
 
           {/* Version Info */}
           <div className={`text-center py-4 text-xs ${
