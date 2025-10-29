@@ -321,9 +321,9 @@ const FlowRateCharts: React.FC<FlowRateChartsProps> = ({ chartData, hierarchyCha
 
   return (
     <>
-      <div className="grid md:grid-cols-3 lg:grid-cols-3 grid-cols-1 gap-4 mb-4">
+      <div className="w-full">
         {ofrConfig && (
-          <div className="relative">
+          <div className="relative h-full">
             <FlowRateChart
               title={ofrConfig.dataSourceConfig?.title || "OFR"}
               unit={ofrConfig.dataSourceConfig?.unit || "l/min"}
@@ -350,7 +350,7 @@ const FlowRateCharts: React.FC<FlowRateChartsProps> = ({ chartData, hierarchyCha
           </div>
         )}
         {wfrConfig && (
-          <div className="relative">
+          <div className="relative h-full">
             <FlowRateChart
               title={wfrConfig.dataSourceConfig?.title || "WFR"}
               unit={wfrConfig.dataSourceConfig?.unit || "l/min"}
@@ -377,7 +377,7 @@ const FlowRateCharts: React.FC<FlowRateChartsProps> = ({ chartData, hierarchyCha
           </div>
         )}
         {gfrConfig && (
-          <div className="relative">
+          <div className="relative h-full">
             <FlowRateChart
               title={gfrConfig.dataSourceConfig?.title || "GFR"}
               unit={gfrConfig.dataSourceConfig?.unit || "l/min"}

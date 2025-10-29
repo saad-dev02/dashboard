@@ -1,7 +1,6 @@
 import React from 'react';
 import { useTheme } from '../../hooks/useTheme';
 import { DeviceChartData, HierarchyChartData } from '../../services/api';
-import StatsCard from '../Charts/StatsCard';
 import FlowRateCharts from './FlowRateCharts';
 import FractionsChart from './FractionsChart';
 import GVFWLRCharts from './GVFWLRCharts';
@@ -135,14 +134,47 @@ const WidgetRenderer: React.FC<WidgetRendererProps> = ({
       const value = getMetricValue(dsConfig.metric);
       return (
         <div className="h-full">
-          <StatsCard
-            icon={dsConfig.icon || '/oildark.png'}
-            title={dsConfig.title || 'Metric'}
-            value={value.toFixed(2)}
-            unit={dsConfig.unit || 'l/min'}
-            color={theme === 'dark' ? (dsConfig.colorDark || '#4D3DF7') : (dsConfig.colorLight || '#F56C44')}
-            isOffline={isDeviceOffline}
-          />
+          <div
+            className={`h-full rounded-lg p-3 md:p-4 transition-all duration-300 overflow-hidden ${
+              theme === 'dark' ? 'bg-[#162345]' : 'bg-white border border-gray-200'
+            }`}
+          >
+            <div className="flex items-center gap-3 mb-3">
+              <div
+                className="w-8 h-8 md:w-10 md:h-10 rounded-lg flex items-center justify-center shrink-0"
+                style={{ backgroundColor: theme === 'dark' ? (dsConfig.colorDark || '#4D3DF7') : (dsConfig.colorLight || '#F56C44') }}
+              >
+                <img src={dsConfig.icon || '/oildark.png'} alt={dsConfig.title} className="w-5 h-5 md:w-6 md:h-6" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div
+                  className={`text-xs md:text-sm font-semibold truncate ${
+                    theme === 'dark' ? 'text-[#D0CCD8]' : 'text-[#555758]'
+                  }`}
+                >
+                  {dsConfig.title || 'Metric'}
+                </div>
+              </div>
+            </div>
+            <div className="flex items-baseline gap-2 mb-1 md:mb-2 min-w-0">
+              <span
+                className={`font-bold leading-none flex-shrink truncate text-2xl md:text-4xl ${
+                  isDeviceOffline
+                    ? theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                    : theme === 'dark' ? 'text-white' : 'text-gray-900'
+                }`}
+              >
+                {value.toFixed(2)}
+              </span>
+              <span
+                className={`flex-shrink-0 leading-none text-sm md:text-base ${
+                  theme === 'dark' ? 'text-[#D0CCD8]' : 'text-[#555758]'
+                }`}
+              >
+                {dsConfig.unit || 'l/min'}
+              </span>
+            </div>
+          </div>
         </div>
       );
 

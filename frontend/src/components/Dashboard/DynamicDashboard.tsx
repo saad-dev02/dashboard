@@ -84,7 +84,7 @@ const DynamicDashboard: React.FC<DynamicDashboardProps> = ({
     }));
   }, [widgets, isEditable]);
 
-  console.log('[DYNAMIC DASHBOARD] Rendering with layouts from database:', layouts);
+  console.log('[GRID] Rendering', widgets.length, 'widgets in', layouts.length, 'positions');
 
   const handleLayoutChange = async (newLayout: Layout[]) => {
     if (!isEditable) return;

@@ -205,30 +205,23 @@ const DashboardContent: React.FC<DashboardContentProps> = ({
 
         if (dashboardsResponse.success && dashboardsResponse.data && dashboardsResponse.data.length > 0) {
           const firstDashboard = dashboardsResponse.data[0];
-          console.log(`[WIDGET SYSTEM FRONTEND] Loading dashboard: ${firstDashboard.name} (${firstDashboard.id})`);
+          console.log(`[DASHBOARD] Loading: ${firstDashboard.name}`);
 
           const widgetsResponse = await apiService.getDashboardWidgets(firstDashboard.id, token);
 
           if (widgetsResponse.success && widgetsResponse.data) {
-            console.log(`[WIDGET SYSTEM FRONTEND] Loaded ${widgetsResponse.data.widgets.length} widgets from database`);
-            widgetsResponse.data.widgets.forEach((widget: any, idx: number) => {
-              console.log(`  [${idx + 1}] ${widget.name} (${widget.component})`);
-              console.log(`      Layout: x=${widget.layoutConfig?.x}, y=${widget.layoutConfig?.y}, w=${widget.layoutConfig?.w}, h=${widget.layoutConfig?.h}`);
-              console.log(`      Data: metric=${widget.dataSourceConfig?.metric}, unit=${widget.dataSourceConfig?.unit}`);
-            });
+            console.log(`[DASHBOARD] ✓ Loaded ${widgetsResponse.data.widgets.length} widgets`);
 
             setWidgets(widgetsResponse.data.widgets);
             setDashboardConfig(widgetsResponse.data.dashboard);
             setWidgetsLoaded(true);
-
-            console.log('[WIDGET SYSTEM FRONTEND] ✓ Widgets loaded and state updated');
           }
         } else {
-          console.log('[WIDGET SYSTEM FRONTEND] No dashboards found');
+          console.warn('[DASHBOARD] No dashboards configured');
           setWidgetsLoaded(true);
         }
       } catch (error) {
-        console.error('[WIDGET SYSTEM FRONTEND] Error loading dashboard widgets:', error);
+        console.error('[DASHBOARD] Failed to load widgets:', error);
         setWidgetsLoaded(true);
       }
     };
