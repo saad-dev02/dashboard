@@ -2,35 +2,40 @@
 const express = require('express');
 const router = express.Router();
 const database = require('../config/database');
-
-// Import the protect middleware function (adjust if your middleware uses a different name)
 const { protect } = require('../middleware/auth');
 
-// Runtime sanity check (temporary; safe to keep)
 if (typeof protect !== 'function') {
   console.error('ERROR: protect middleware is not a function. Check ../middleware/auth.js export.');
   throw new Error('Auth middleware not found (protect)');
 }
 
-// GET /api/widgets/dashboard/:dashboardId
-router.get('/dashboard/:dashboardId', protect, async (req, res) => {
+// GET /api/widgets/user-dashboard
+// Get the company dashboard for logged in user
+router.get('/user-dashboard', protect, async (req, res) => {
   try {
-    const { dashboardId } = req.params;
-    const userId = req.user.id;
+    const companyId = req.user.company_id;
+    const userRole = req.user.role;
 
     const dashboardQuery = `
-      SELECT d.*
+      SELECT d.*, c.name as company_name
       FROM dashboards d
-      WHERE d.id = $1
-        AND (d.created_by = $2 OR d.is_active = true)
+      INNER JOIN "user" u ON d.created_by = u.id
+      INNER JOIN company c ON u.company_id = c.id
+      WHERE c.id = $1 AND d.is_active = true
+      ORDER BY d.created_at ASC
+      LIMIT 1
     `;
 
-    const dashboardResult = await database.query(dashboardQuery, [dashboardId, userId]);
+    const dashboardResult = await database.query(dashboardQuery, [companyId]);
 
     if (dashboardResult.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'Dashboard not found'
+      return res.json({
+        success: true,
+        data: {
+          dashboard: null,
+          widgets: [],
+          message: 'No dashboard configured for your company yet'
+        }
       });
     }
 
@@ -56,12 +61,7 @@ router.get('/dashboard/:dashboardId', protect, async (req, res) => {
       ORDER BY dl.display_order ASC
     `;
 
-    const widgetsResult = await database.query(widgetsQuery, [dashboardId]);
-
-    console.log(`[WIDGET SYSTEM] Loaded dashboard ${dashboardId} with ${widgetsResult.rows.length} widgets from database`);
-    widgetsResult.rows.forEach((w, idx) => {
-      console.log(`  [${idx + 1}] ${w.widget_name} (${w.component_name}) - Layout: x=${w.layout_config?.x}, y=${w.layout_config?.y}, w=${w.layout_config?.w}, h=${w.layout_config?.h}`);
-    });
+    const widgetsResult = await database.query(widgetsQuery, [dashboard.id]);
 
     res.json({
       success: true,
@@ -71,7 +71,9 @@ router.get('/dashboard/:dashboardId', protect, async (req, res) => {
           name: dashboard.name,
           description: dashboard.description,
           gridConfig: dashboard.grid_config,
-          version: dashboard.version
+          version: dashboard.version,
+          companyName: dashboard.company_name,
+          canEdit: userRole === 'admin'
         },
         widgets: widgetsResult.rows.map(widget => ({
           layoutId: widget.layout_id,
@@ -89,7 +91,7 @@ router.get('/dashboard/:dashboardId', protect, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error fetching dashboard:', error);
+    console.error('Error fetching user dashboard:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch dashboard',
@@ -98,117 +100,195 @@ router.get('/dashboard/:dashboardId', protect, async (req, res) => {
   }
 });
 
-// GET /api/widgets/dashboards
-router.get('/dashboards', protect, async (req, res) => {
+// GET /api/widgets/available-widgets
+// Get available widgets by device type for admin to choose from
+router.get('/available-widgets', protect, async (req, res) => {
   try {
-    const userId = req.user.id;
+    const { deviceTypeId } = req.query;
 
-    const query = `
-      SELECT
-        d.*,
-        COUNT(dl.id) as widget_count
-      FROM dashboards d
-      LEFT JOIN dashboard_layouts dl ON d.id = dl.dashboard_id
-      WHERE d.created_by = $1 OR d.is_active = true
-      GROUP BY d.id
-      ORDER BY d.created_at DESC
-    `;
-
-    const result = await database.query(query, [userId]);
-
-    res.json({
-      success: true,
-      data: result.rows.map(dashboard => ({
-        id: dashboard.id,
-        name: dashboard.name,
-        description: dashboard.description,
-        version: dashboard.version,
-        isActive: dashboard.is_active,
-        widgetCount: parseInt(dashboard.widget_count, 10),
-        createdAt: dashboard.created_at
-      }))
-    });
-  } catch (error) {
-    console.error('Error fetching dashboards:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch dashboards',
-      error: error.message
-    });
-  }
-});
-
-// GET /api/widgets/types
-router.get('/types', protect, async (req, res) => {
-  try {
-    const query = 'SELECT * FROM widget_types ORDER BY name';
-    const result = await database.query(query);
-
-    res.json({
-      success: true,
-      data: result.rows.map(type => ({
-        id: type.id,
-        name: type.name,
-        componentName: type.component_name,
-        defaultConfig: type.default_config
-      }))
-    });
-  } catch (error) {
-    console.error('Error fetching widget types:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch widget types',
-      error: error.message
-    });
-  }
-});
-
-// POST /api/widgets/dashboard/:dashboardId/layout
-// Update widget layout for a dashboard
-router.post('/dashboard/:dashboardId/layout', protect, async (req, res) => {
-  const client = await database.pool.connect();
-  try {
-    const { dashboardId } = req.params;
-    const { layouts } = req.body; // Array of { layoutId, layoutConfig: { x, y, w, h, minW, minH, static } }
-
-    if (!Array.isArray(layouts)) {
+    if (!deviceTypeId) {
       return res.status(400).json({
         success: false,
-        message: 'layouts must be an array'
+        message: 'deviceTypeId is required'
+      });
+    }
+
+    const deviceTypeResult = await database.query(
+      'SELECT id, type_name FROM device_type WHERE id = $1',
+      [deviceTypeId]
+    );
+
+    if (deviceTypeResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Device type not found'
+      });
+    }
+
+    const widgetTypesResult = await database.query(
+      'SELECT id, name, component_name, default_config FROM widget_types ORDER BY name'
+    );
+
+    const propertiesResult = await database.query(
+      `SELECT id, variable_name, variable_tag, data_type, unit, ui_order
+       FROM device_data_mapping
+       WHERE device_type_id = $1
+       ORDER BY ui_order, variable_name`,
+      [deviceTypeId]
+    );
+
+    res.json({
+      success: true,
+      data: {
+        deviceType: deviceTypeResult.rows[0],
+        widgetTypes: widgetTypesResult.rows.map(wt => ({
+          id: wt.id,
+          name: wt.name,
+          componentName: wt.component_name,
+          defaultConfig: wt.default_config,
+          displayName: wt.name === 'line_chart' ? 'Line Chart' :
+                       wt.name === 'kpi' ? 'KPI Card' :
+                       wt.name === 'donut_chart' ? 'Donut Chart' :
+                       wt.name === 'map' ? 'Map' : wt.name
+        })),
+        properties: propertiesResult.rows.map(p => ({
+          id: p.id,
+          name: p.variable_name,
+          tag: p.variable_tag,
+          dataType: p.data_type,
+          unit: p.unit,
+          order: p.ui_order
+        }))
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching available widgets:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch available widgets',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/widgets/device-types
+// Get all device types for admin
+router.get('/device-types', protect, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Only admins can access this endpoint'
+      });
+    }
+
+    const result = await database.query(
+      'SELECT id, type_name, logo FROM device_type ORDER BY type_name'
+    );
+
+    res.json({
+      success: true,
+      data: result.rows.map(dt => ({
+        id: dt.id,
+        typeName: dt.type_name,
+        logo: dt.logo
+      }))
+    });
+  } catch (error) {
+    console.error('Error fetching device types:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch device types',
+      error: error.message
+    });
+  }
+});
+
+// POST /api/widgets/create-widget
+// Admin creates a custom widget by selecting device type, widget type, and properties
+router.post('/create-widget', protect, async (req, res) => {
+  const client = await database.pool.connect();
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Only admins can create widgets'
+      });
+    }
+
+    const { deviceTypeId, widgetTypeId, properties, displayName } = req.body;
+
+    if (!deviceTypeId || !widgetTypeId || !properties || properties.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'deviceTypeId, widgetTypeId, and properties array are required'
       });
     }
 
     await client.query('BEGIN');
 
-    console.log(`[WIDGET SYSTEM] Updating ${layouts.length} widget layouts for dashboard ${dashboardId}`);
+    const seriesConfig = [];
+    for (const prop of properties) {
+      const mappingResult = await client.query(
+        `SELECT variable_name, variable_tag, unit, data_type
+         FROM device_data_mapping
+         WHERE device_type_id = $1 AND variable_name = $2`,
+        [deviceTypeId, prop.propertyName]
+      );
 
-    for (const layout of layouts) {
-      const { layoutId, layoutConfig } = layout;
-
-      const result = await client.query(`
-        UPDATE dashboard_layouts
-        SET layout_config = $1, updated_at = CURRENT_TIMESTAMP
-        WHERE id = $2 AND dashboard_id = $3
-        RETURNING id
-      `, [JSON.stringify(layoutConfig), layoutId, dashboardId]);
-
-      if (result.rows.length > 0) {
-        console.log(`  Updated layout ${layoutId}: x=${layoutConfig.x}, y=${layoutConfig.y}, w=${layoutConfig.w}, h=${layoutConfig.h}`);
+      if (mappingResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({
+          success: false,
+          message: `Property ${prop.propertyName} not found for device type`
+        });
       }
+
+      const mapping = mappingResult.rows[0];
+      seriesConfig.push({
+        propertyName: prop.propertyName,
+        displayName: prop.displayName || mapping.variable_name,
+        dataSourceProperty: mapping.variable_tag,
+        unit: mapping.unit,
+        dataType: mapping.data_type
+      });
     }
+
+    const dataSourceConfig = {
+      deviceTypeId: parseInt(deviceTypeId),
+      numberOfSeries: properties.length,
+      seriesConfig: seriesConfig
+    };
+
+    const widgetResult = await client.query(
+      `INSERT INTO widget_definitions (name, description, widget_type_id, data_source_config, created_by)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id`,
+      [
+        displayName || `Custom Widget - ${seriesConfig.map(s => s.displayName).join(', ')}`,
+        `Custom widget for device type ${deviceTypeId}`,
+        widgetTypeId,
+        JSON.stringify(dataSourceConfig),
+        req.user.id
+      ]
+    );
 
     await client.query('COMMIT');
 
     res.json({
       success: true,
-      message: 'Widget layouts updated successfully'
+      data: {
+        widgetId: widgetResult.rows[0].id,
+        dataSourceConfig
+      },
+      message: 'Widget created successfully'
     });
   } catch (error) {
     await client.query('ROLLBACK');
-    console.error('Error updating widget layouts:', error);
+    console.error('Error creating widget:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to update widget layouts',
+      message: 'Failed to create widget',
       error: error.message
     });
   } finally {
@@ -216,13 +296,19 @@ router.post('/dashboard/:dashboardId/layout', protect, async (req, res) => {
   }
 });
 
-// POST /api/widgets/dashboard/:dashboardId/widget
-// Add a new widget to a dashboard
-router.post('/dashboard/:dashboardId/widget', protect, async (req, res) => {
+// POST /api/widgets/add-to-dashboard
+// Admin adds widget to dashboard
+router.post('/add-to-dashboard', protect, async (req, res) => {
   const client = await database.pool.connect();
   try {
-    const { dashboardId } = req.params;
-    const { widgetDefinitionId, layoutConfig, instanceConfig, displayOrder } = req.body;
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Only admins can add widgets to dashboard'
+      });
+    }
+
+    const { widgetDefinitionId, layoutConfig } = req.body;
 
     if (!widgetDefinitionId) {
       return res.status(400).json({
@@ -233,40 +319,60 @@ router.post('/dashboard/:dashboardId/widget', protect, async (req, res) => {
 
     await client.query('BEGIN');
 
-    const result = await client.query(`
-      INSERT INTO dashboard_layouts (
-        dashboard_id,
-        widget_definition_id,
-        layout_config,
-        instance_config,
-        display_order
-      ) VALUES ($1, $2, $3, $4, $5)
-      RETURNING id
-    `, [
-      dashboardId,
-      widgetDefinitionId,
-      JSON.stringify(layoutConfig || { x: 0, y: 0, w: 4, h: 2, minW: 2, minH: 1, static: false }),
-      JSON.stringify(instanceConfig || {}),
-      displayOrder || 0
-    ]);
+    const dashboardResult = await client.query(
+      `SELECT d.id
+       FROM dashboards d
+       INNER JOIN "user" u ON d.created_by = u.id
+       WHERE u.company_id = $1 AND d.is_active = true
+       ORDER BY d.created_at ASC
+       LIMIT 1`,
+      [req.user.company_id]
+    );
+
+    if (dashboardResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({
+        success: false,
+        message: 'No active dashboard found for your company'
+      });
+    }
+
+    const dashboardId = dashboardResult.rows[0].id;
+
+    const maxOrderResult = await client.query(
+      'SELECT COALESCE(MAX(display_order), 0) as max_order FROM dashboard_layouts WHERE dashboard_id = $1',
+      [dashboardId]
+    );
+    const nextOrder = maxOrderResult.rows[0].max_order + 1;
+
+    const result = await client.query(
+      `INSERT INTO dashboard_layouts (dashboard_id, widget_definition_id, layout_config, display_order)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id`,
+      [
+        dashboardId,
+        widgetDefinitionId,
+        JSON.stringify(layoutConfig || { x: 0, y: 0, w: 4, h: 2, minW: 2, minH: 1, static: false }),
+        nextOrder
+      ]
+    );
 
     await client.query('COMMIT');
-
-    console.log(`[WIDGET SYSTEM] Added widget ${widgetDefinitionId} to dashboard ${dashboardId}`);
 
     res.json({
       success: true,
       data: {
-        layoutId: result.rows[0].id
+        layoutId: result.rows[0].id,
+        dashboardId
       },
-      message: 'Widget added successfully'
+      message: 'Widget added to dashboard successfully'
     });
   } catch (error) {
     await client.query('ROLLBACK');
-    console.error('Error adding widget:', error);
+    console.error('Error adding widget to dashboard:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to add widget',
+      message: 'Failed to add widget to dashboard',
       error: error.message
     });
   } finally {
@@ -274,26 +380,30 @@ router.post('/dashboard/:dashboardId/widget', protect, async (req, res) => {
   }
 });
 
-// DELETE /api/widgets/dashboard/:dashboardId/layout/:layoutId
-// Remove a widget from a dashboard
-router.delete('/dashboard/:dashboardId/layout/:layoutId', protect, async (req, res) => {
+// DELETE /api/widgets/remove-widget/:layoutId
+// Admin removes widget from dashboard
+router.delete('/remove-widget/:layoutId', protect, async (req, res) => {
   try {
-    const { dashboardId, layoutId } = req.params;
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Only admins can remove widgets'
+      });
+    }
 
-    const result = await database.query(`
-      DELETE FROM dashboard_layouts
-      WHERE id = $1 AND dashboard_id = $2
-      RETURNING id
-    `, [layoutId, dashboardId]);
+    const { layoutId } = req.params;
+
+    const result = await database.query(
+      'DELETE FROM dashboard_layouts WHERE id = $1 RETURNING id',
+      [layoutId]
+    );
 
     if (result.rows.length === 0) {
       return res.status(404).json({
         success: false,
-        message: 'Widget layout not found'
+        message: 'Widget not found'
       });
     }
-
-    console.log(`[WIDGET SYSTEM] Removed widget layout ${layoutId} from dashboard ${dashboardId}`);
 
     res.json({
       success: true,
@@ -309,277 +419,75 @@ router.delete('/dashboard/:dashboardId/layout/:layoutId', protect, async (req, r
   }
 });
 
-// GET /api/widgets/definitions
-// Get all available widget definitions
-router.get('/definitions', protect, async (req, res) => {
+// POST /api/widgets/update-layout
+// Admin updates widget positions on dashboard
+router.post('/update-layout', protect, async (req, res) => {
+  const client = await database.pool.connect();
   try {
-    const query = `
-      SELECT
-        wd.id,
-        wd.name,
-        wd.description,
-        wd.data_source_config,
-        wt.name as widget_type,
-        wt.component_name,
-        wt.default_config
-      FROM widget_definitions wd
-      INNER JOIN widget_types wt ON wd.widget_type_id = wt.id
-      ORDER BY wd.name
-    `;
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Only admins can update layout'
+      });
+    }
 
-    const result = await database.query(query);
+    const { layouts } = req.body;
 
-    res.json({
-      success: true,
-      data: result.rows.map(def => ({
-        id: def.id,
-        name: def.name,
-        description: def.description,
-        dataSourceConfig: def.data_source_config,
-        widgetType: def.widget_type,
-        componentName: def.component_name,
-        defaultConfig: def.default_config
-      }))
-    });
-  } catch (error) {
-    console.error('Error fetching widget definitions:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch widget definitions',
-      error: error.message
-    });
-  }
-});
-
-// GET /api/widgets/device-types
-// Get all device types
-router.get('/device-types', protect, async (req, res) => {
-  try {
-    const result = await database.query('SELECT id, type_name, logo FROM device_type ORDER BY type_name');
-
-    res.json({
-      success: true,
-      data: result.rows
-    });
-  } catch (error) {
-    console.error('Error fetching device types:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch device types',
-      error: error.message
-    });
-  }
-});
-
-// GET /api/widgets/device-types/:deviceTypeId/properties
-// Get available properties for a device type from device_data_mapping
-router.get('/device-types/:deviceTypeId/properties', protect, async (req, res) => {
-  try {
-    const { deviceTypeId } = req.params;
-
-    const result = await database.query(`
-      SELECT
-        id,
-        variable_name,
-        variable_tag,
-        data_type,
-        unit,
-        ui_order
-      FROM device_data_mapping
-      WHERE device_type_id = $1
-      ORDER BY ui_order, variable_name
-    `, [deviceTypeId]);
-
-    res.json({
-      success: true,
-      data: result.rows
-    });
-  } catch (error) {
-    console.error('Error fetching device properties:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch device properties',
-      error: error.message
-    });
-  }
-});
-
-// POST /api/widgets/definitions
-// Create a new widget definition with device type and property mapping
-router.post('/definitions', protect, async (req, res) => {
-  try {
-    const {
-      name,
-      description,
-      widgetTypeId,
-      deviceTypeId,
-      propertyName,
-      displayName,
-      numberOfSeries,
-      seriesConfig,
-      chartConfig
-    } = req.body;
-    const userId = req.user.id;
-
-    if (!name || !widgetTypeId) {
+    if (!Array.isArray(layouts)) {
       return res.status(400).json({
         success: false,
-        message: 'name and widgetTypeId are required'
+        message: 'layouts must be an array'
       });
     }
 
-    let dataSourceConfig = {};
+    await client.query('BEGIN');
 
-    if (deviceTypeId && propertyName) {
-      const mappingResult = await database.query(`
-        SELECT variable_tag, unit, data_type
-        FROM device_data_mapping
-        WHERE device_type_id = $1 AND variable_name = $2
-      `, [deviceTypeId, propertyName]);
-
-      if (mappingResult.rows.length === 0) {
-        return res.status(400).json({
-          success: false,
-          message: `Property ${propertyName} not found for device type ${deviceTypeId}`
-        });
-      }
-
-      const mapping = mappingResult.rows[0];
-
-      dataSourceConfig = {
-        deviceTypeId: parseInt(deviceTypeId),
-        propertyName: propertyName,
-        dataSourceProperty: mapping.variable_tag,
-        displayName: displayName || propertyName,
-        unit: mapping.unit,
-        dataType: mapping.data_type,
-        numberOfSeries: numberOfSeries || 1,
-        seriesConfig: seriesConfig || [],
-        chartConfig: chartConfig || {}
-      };
-    } else if (req.body.dataSourceConfig) {
-      dataSourceConfig = req.body.dataSourceConfig;
+    for (const layout of layouts) {
+      const { layoutId, layoutConfig } = layout;
+      await client.query(
+        'UPDATE dashboard_layouts SET layout_config = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+        [JSON.stringify(layoutConfig), layoutId]
+      );
     }
 
-    const result = await database.query(`
-      INSERT INTO widget_definitions (
-        name,
-        description,
-        widget_type_id,
-        data_source_config,
-        created_by
-      ) VALUES ($1, $2, $3, $4, $5)
-      RETURNING id
-    `, [
-      name,
-      description || '',
-      widgetTypeId,
-      JSON.stringify(dataSourceConfig),
-      userId
-    ]);
-
-    console.log(`[WIDGET SYSTEM] Created widget definition: ${name}`);
+    await client.query('COMMIT');
 
     res.json({
       success: true,
-      data: {
-        id: result.rows[0].id,
-        dataSourceConfig
-      },
-      message: 'Widget definition created successfully'
+      message: 'Layout updated successfully'
     });
   } catch (error) {
-    console.error('Error creating widget definition:', error);
+    await client.query('ROLLBACK');
+    console.error('Error updating layout:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to create widget definition',
+      message: 'Failed to update layout',
       error: error.message
     });
+  } finally {
+    client.release();
   }
 });
 
-// PUT /api/widgets/definitions/:id
-// Update widget definition (for changing units, titles, etc.)
-router.put('/definitions/:id', protect, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { name, description, dataSourceConfig } = req.body;
 
-    const updates = [];
-    const values = [];
-    let paramCount = 1;
 
-    if (name) {
-      updates.push(`name = $${paramCount++}`);
-      values.push(name);
-    }
 
-    if (description !== undefined) {
-      updates.push(`description = $${paramCount++}`);
-      values.push(description);
-    }
 
-    if (dataSourceConfig) {
-      updates.push(`data_source_config = $${paramCount++}`);
-      values.push(JSON.stringify(dataSourceConfig));
-    }
-
-    if (updates.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'No fields to update'
-      });
-    }
-
-    updates.push(`updated_at = CURRENT_TIMESTAMP`);
-    values.push(id);
-
-    const result = await database.query(`
-      UPDATE widget_definitions
-      SET ${updates.join(', ')}
-      WHERE id = $${paramCount}
-      RETURNING id
-    `, values);
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'Widget definition not found'
-      });
-    }
-
-    console.log(`[WIDGET SYSTEM] Updated widget definition ${id}`);
-
-    res.json({
-      success: true,
-      message: 'Widget definition updated successfully'
-    });
-  } catch (error) {
-    console.error('Error updating widget definition:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to update widget definition',
-      error: error.message
-    });
-  }
-});
-
-// GET /api/widgets/data/:widgetId
-// Get widget data based on its configuration
-router.get('/data/:widgetId', protect, async (req, res) => {
+// GET /api/widgets/widget-data/:widgetId
+// Get widget data based on its configuration from data_source_config
+router.get('/widget-data/:widgetId', protect, async (req, res) => {
   try {
     const { widgetId } = req.params;
     const { limit = 100, timeRange = '24h' } = req.query;
     const companyId = req.user.company_id;
 
-    const widgetResult = await database.query(`
-      SELECT
-        wd.data_source_config,
-        wt.component_name
-      FROM widget_definitions wd
-      INNER JOIN widget_types wt ON wd.widget_type_id = wt.id
-      WHERE wd.id = $1
-    `, [widgetId]);
+    const widgetResult = await database.query(
+      `SELECT wd.data_source_config, wt.component_name, wt.name as widget_type
+       FROM widget_definitions wd
+       INNER JOIN widget_types wt ON wd.widget_type_id = wt.id
+       WHERE wd.id = $1`,
+      [widgetId]
+    );
 
     if (widgetResult.rows.length === 0) {
       return res.status(404).json({
@@ -591,11 +499,12 @@ router.get('/data/:widgetId', protect, async (req, res) => {
     const widget = widgetResult.rows[0];
     const dataSourceConfig = widget.data_source_config;
 
-    if (!dataSourceConfig.dataSourceProperty) {
+    if (!dataSourceConfig.seriesConfig || dataSourceConfig.seriesConfig.length === 0) {
       return res.json({
         success: true,
         data: [],
-        message: 'No data source property configured'
+        config: dataSourceConfig,
+        message: 'No series configured'
       });
     }
 
@@ -606,16 +515,32 @@ router.get('/data/:widgetId', protect, async (req, res) => {
     else if (timeRange === '7d') timeFilter = "AND dd.created_at >= NOW() - INTERVAL '7 days'";
     else if (timeRange === '30d') timeFilter = "AND dd.created_at >= NOW() - INTERVAL '30 days'";
 
-    let query = '';
-    let params = [];
+    const series = dataSourceConfig.seriesConfig[0];
+    const query = `
+      SELECT
+        dd.created_at as timestamp,
+        dd.serial_number,
+        dd.data->>$1 as value,
+        d.metadata->>'location' as location
+      FROM device_data dd
+      INNER JOIN device d ON dd.device_id = d.id
+      WHERE d.company_id = $2
+        AND d.device_type_id = $3
+        ${timeFilter}
+      ORDER BY dd.created_at DESC
+      LIMIT $4
+    `;
 
-    if (dataSourceConfig.deviceTypeId) {
-      query = `
+    const params = [series.dataSourceProperty, companyId, dataSourceConfig.deviceTypeId, parseInt(limit)];
+    const dataResult = await database.query(query, params);
+
+    const seriesData = {};
+    for (const s of dataSourceConfig.seriesConfig) {
+      const seriesQuery = `
         SELECT
           dd.created_at as timestamp,
           dd.serial_number,
-          dd.data->>$1 as value,
-          d.metadata->>'location' as location
+          dd.data->>$1 as value
         FROM device_data dd
         INNER JOIN device d ON dd.device_id = d.id
         WHERE d.company_id = $2
@@ -624,35 +549,23 @@ router.get('/data/:widgetId', protect, async (req, res) => {
         ORDER BY dd.created_at DESC
         LIMIT $4
       `;
-      params = [dataSourceConfig.dataSourceProperty, companyId, dataSourceConfig.deviceTypeId, parseInt(limit)];
-    } else {
-      query = `
-        SELECT
-          dd.created_at as timestamp,
-          dd.serial_number,
-          dd.data->>$1 as value
-        FROM device_data dd
-        INNER JOIN device d ON dd.device_id = d.id
-        WHERE d.company_id = $2
-          ${timeFilter}
-        ORDER BY dd.created_at DESC
-        LIMIT $3
-      `;
-      params = [dataSourceConfig.dataSourceProperty, companyId, parseInt(limit)];
+      const seriesResult = await database.query(seriesQuery, [
+        s.dataSourceProperty,
+        companyId,
+        dataSourceConfig.deviceTypeId,
+        parseInt(limit)
+      ]);
+
+      seriesData[s.displayName] = seriesResult.rows.map(row => ({
+        timestamp: row.timestamp,
+        serialNumber: row.serial_number,
+        value: parseFloat(row.value) || 0
+      }));
     }
-
-    const dataResult = await database.query(query, params);
-
-    const formattedData = dataResult.rows.map(row => ({
-      timestamp: row.timestamp,
-      serialNumber: row.serial_number,
-      value: parseFloat(row.value) || 0,
-      location: row.location
-    }));
 
     res.json({
       success: true,
-      data: formattedData,
+      data: seriesData,
       config: dataSourceConfig
     });
   } catch (error) {
@@ -665,21 +578,20 @@ router.get('/data/:widgetId', protect, async (req, res) => {
   }
 });
 
-// GET /api/widgets/data/:widgetId/latest
+// GET /api/widgets/widget-data/:widgetId/latest
 // Get latest widget data from device_latest
-router.get('/data/:widgetId/latest', protect, async (req, res) => {
+router.get('/widget-data/:widgetId/latest', protect, async (req, res) => {
   try {
     const { widgetId } = req.params;
     const companyId = req.user.company_id;
 
-    const widgetResult = await database.query(`
-      SELECT
-        wd.data_source_config,
-        wt.component_name
-      FROM widget_definitions wd
-      INNER JOIN widget_types wt ON wd.widget_type_id = wt.id
-      WHERE wd.id = $1
-    `, [widgetId]);
+    const widgetResult = await database.query(
+      `SELECT wd.data_source_config, wt.component_name
+       FROM widget_definitions wd
+       INNER JOIN widget_types wt ON wd.widget_type_id = wt.id
+       WHERE wd.id = $1`,
+      [widgetId]
+    );
 
     if (widgetResult.rows.length === 0) {
       return res.status(404).json({
@@ -691,19 +603,17 @@ router.get('/data/:widgetId/latest', protect, async (req, res) => {
     const widget = widgetResult.rows[0];
     const dataSourceConfig = widget.data_source_config;
 
-    if (!dataSourceConfig.dataSourceProperty) {
+    if (!dataSourceConfig.seriesConfig || dataSourceConfig.seriesConfig.length === 0) {
       return res.json({
         success: true,
         data: null,
-        message: 'No data source property configured'
+        message: 'No series configured'
       });
     }
 
-    let query = '';
-    let params = [];
-
-    if (dataSourceConfig.deviceTypeId) {
-      query = `
+    const seriesData = {};
+    for (const s of dataSourceConfig.seriesConfig) {
+      const query = `
         SELECT
           dl.updated_at as timestamp,
           dl.serial_number,
@@ -717,49 +627,34 @@ router.get('/data/:widgetId/latest', protect, async (req, res) => {
           AND d.device_type_id = $3
         ORDER BY dl.updated_at DESC
       `;
-      params = [dataSourceConfig.dataSourceProperty, companyId, dataSourceConfig.deviceTypeId];
-    } else {
-      query = `
-        SELECT
-          dl.updated_at as timestamp,
-          dl.serial_number,
-          dl.data->>$1 as value,
-          d.metadata->>'location' as location,
-          dt.type_name as device_type
-        FROM device_latest dl
-        INNER JOIN device d ON dl.device_id = d.id
-        INNER JOIN device_type dt ON d.device_type_id = dt.id
-        WHERE d.company_id = $2
-        ORDER BY dl.updated_at DESC
-      `;
-      params = [dataSourceConfig.dataSourceProperty, companyId];
-    }
+      const params = [s.dataSourceProperty, companyId, dataSourceConfig.deviceTypeId];
+      const dataResult = await database.query(query, params);
 
-    const dataResult = await database.query(query, params);
+      const formattedData = dataResult.rows.map(row => ({
+        timestamp: row.timestamp,
+        serialNumber: row.serial_number,
+        value: parseFloat(row.value) || 0,
+        location: row.location,
+        deviceType: row.device_type
+      }));
 
-    const formattedData = dataResult.rows.map(row => ({
-      timestamp: row.timestamp,
-      serialNumber: row.serial_number,
-      value: parseFloat(row.value) || 0,
-      location: row.location,
-      deviceType: row.device_type
-    }));
+      let aggregatedValue = null;
+      if (formattedData.length > 0) {
+        const sum = formattedData.reduce((acc, item) => acc + item.value, 0);
+        aggregatedValue = sum / formattedData.length;
+      }
 
-    let aggregatedValue = null;
-    if (formattedData.length > 0) {
-      const sum = formattedData.reduce((acc, item) => acc + item.value, 0);
-      aggregatedValue = sum / formattedData.length;
+      seriesData[s.displayName] = {
+        latest: formattedData,
+        aggregatedValue,
+        count: formattedData.length,
+        unit: s.unit
+      };
     }
 
     res.json({
       success: true,
-      data: {
-        latest: formattedData,
-        aggregatedValue,
-        count: formattedData.length,
-        unit: dataSourceConfig.unit,
-        displayName: dataSourceConfig.displayName
-      },
+      data: seriesData,
       config: dataSourceConfig
     });
   } catch (error) {
@@ -772,54 +667,5 @@ router.get('/data/:widgetId/latest', protect, async (req, res) => {
   }
 });
 
-// POST /api/widgets/dashboards
-// Create a new dashboard
-router.post('/dashboards', protect, async (req, res) => {
-  try {
-    const { name, description, gridConfig } = req.body;
-    const userId = req.user.id;
-
-    if (!name) {
-      return res.status(400).json({
-        success: false,
-        message: 'name is required'
-      });
-    }
-
-    const result = await database.query(`
-      INSERT INTO dashboards (name, description, grid_config, created_by)
-      VALUES ($1, $2, $3, $4)
-      RETURNING id
-    `, [
-      name,
-      description || '',
-      JSON.stringify(gridConfig || {
-        cols: 12,
-        rowHeight: 100,
-        margin: [10, 10],
-        breakpoints: { lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 },
-        containerPadding: [10, 10]
-      }),
-      userId
-    ]);
-
-    console.log(`[WIDGET SYSTEM] Created dashboard: ${name}`);
-
-    res.json({
-      success: true,
-      data: {
-        id: result.rows[0].id
-      },
-      message: 'Dashboard created successfully'
-    });
-  } catch (error) {
-    console.error('Error creating dashboard:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to create dashboard',
-      error: error.message
-    });
-  }
-});
 
 module.exports = router;
