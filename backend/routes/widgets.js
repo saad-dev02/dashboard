@@ -216,38 +216,39 @@ router.post('/create-widget', protect, async (req, res) => {
       });
     }
 
-    const { deviceTypeId, widgetTypeId, properties, displayName } = req.body;
+    const { deviceTypeId, widgetTypeId, propertyIds, displayName } = req.body;
 
-    if (!deviceTypeId || !widgetTypeId || !properties || properties.length === 0) {
+    if (!deviceTypeId || !widgetTypeId || !propertyIds || propertyIds.length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'deviceTypeId, widgetTypeId, and properties array are required'
+        message: 'deviceTypeId, widgetTypeId, and propertyIds array are required'
       });
     }
 
     await client.query('BEGIN');
 
     const seriesConfig = [];
-    for (const prop of properties) {
+    for (const propId of propertyIds) {
       const mappingResult = await client.query(
-        `SELECT variable_name, variable_tag, unit, data_type
+        `SELECT id, variable_name, variable_tag, unit, data_type
          FROM device_data_mapping
-         WHERE device_type_id = $1 AND variable_name = $2`,
-        [deviceTypeId, prop.propertyName]
+         WHERE id = $1 AND device_type_id = $2`,
+        [propId, deviceTypeId]
       );
 
       if (mappingResult.rows.length === 0) {
         await client.query('ROLLBACK');
         return res.status(400).json({
           success: false,
-          message: `Property ${prop.propertyName} not found for device type`
+          message: `Property with ID ${propId} not found for device type ${deviceTypeId}`
         });
       }
 
       const mapping = mappingResult.rows[0];
       seriesConfig.push({
-        propertyName: prop.propertyName,
-        displayName: prop.displayName || mapping.variable_name,
+        propertyId: mapping.id,
+        propertyName: mapping.variable_name,
+        displayName: mapping.variable_name,
         dataSourceProperty: mapping.variable_tag,
         unit: mapping.unit,
         dataType: mapping.data_type
@@ -256,32 +257,67 @@ router.post('/create-widget', protect, async (req, res) => {
 
     const dataSourceConfig = {
       deviceTypeId: parseInt(deviceTypeId),
-      numberOfSeries: properties.length,
+      numberOfSeries: propertyIds.length,
       seriesConfig: seriesConfig
     };
 
+    const widgetName = displayName || `${seriesConfig.map(s => s.displayName).join(', ')} Chart`;
     const widgetResult = await client.query(
       `INSERT INTO widget_definitions (name, description, widget_type_id, data_source_config, created_by)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING id`,
       [
-        displayName || `Custom Widget - ${seriesConfig.map(s => s.displayName).join(', ')}`,
-        `Custom widget for device type ${deviceTypeId}`,
+        widgetName,
+        `Custom widget showing ${seriesConfig.map(s => s.displayName).join(', ')} for device type ${deviceTypeId}`,
         widgetTypeId,
         JSON.stringify(dataSourceConfig),
         req.user.id
       ]
     );
 
+    const widgetId = widgetResult.rows[0].id;
+
+    const dashboardResult = await client.query(
+      `SELECT d.id
+       FROM dashboards d
+       INNER JOIN "user" u ON d.created_by = u.id
+       WHERE u.company_id = $1 AND d.is_active = true
+       ORDER BY d.created_at ASC
+       LIMIT 1`,
+      [req.user.company_id]
+    );
+
+    if (dashboardResult.rows.length > 0) {
+      const dashboardId = dashboardResult.rows[0].id;
+
+      const maxOrderResult = await client.query(
+        'SELECT COALESCE(MAX(display_order), 0) as max_order FROM dashboard_layouts WHERE dashboard_id = $1',
+        [dashboardId]
+      );
+      const nextOrder = maxOrderResult.rows[0].max_order + 1;
+
+      await client.query(
+        `INSERT INTO dashboard_layouts (dashboard_id, widget_definition_id, layout_config, display_order)
+         VALUES ($1, $2, $3, $4)`,
+        [
+          dashboardId,
+          widgetId,
+          JSON.stringify({ x: 0, y: 0, w: 6, h: 3, minW: 3, minH: 2, static: false }),
+          nextOrder
+        ]
+      );
+    }
+
     await client.query('COMMIT');
 
     res.json({
       success: true,
       data: {
-        widgetId: widgetResult.rows[0].id,
-        dataSourceConfig
+        widgetId,
+        dataSourceConfig,
+        widgetName
       },
-      message: 'Widget created successfully'
+      message: 'Widget created and added to dashboard successfully'
     });
   } catch (error) {
     await client.query('ROLLBACK');
@@ -515,38 +551,19 @@ router.get('/widget-data/:widgetId', protect, async (req, res) => {
     else if (timeRange === '7d') timeFilter = "AND dd.created_at >= NOW() - INTERVAL '7 days'";
     else if (timeRange === '30d') timeFilter = "AND dd.created_at >= NOW() - INTERVAL '30 days'";
 
-    const series = dataSourceConfig.seriesConfig[0];
-    const query = `
-      SELECT
-        dd.created_at as timestamp,
-        dd.serial_number,
-        dd.data->>$1 as value,
-        d.metadata->>'location' as location
-      FROM device_data dd
-      INNER JOIN device d ON dd.device_id = d.id
-      WHERE d.company_id = $2
-        AND d.device_type_id = $3
-        ${timeFilter}
-      ORDER BY dd.created_at DESC
-      LIMIT $4
-    `;
-
-    const params = [series.dataSourceProperty, companyId, dataSourceConfig.deviceTypeId, parseInt(limit)];
-    const dataResult = await database.query(query, params);
-
     const seriesData = {};
     for (const s of dataSourceConfig.seriesConfig) {
       const seriesQuery = `
         SELECT
           dd.created_at as timestamp,
           dd.serial_number,
-          dd.data->>$1 as value
+          (dd.data->>$1)::numeric as value
         FROM device_data dd
         INNER JOIN device d ON dd.device_id = d.id
         WHERE d.company_id = $2
           AND d.device_type_id = $3
           ${timeFilter}
-        ORDER BY dd.created_at DESC
+        ORDER BY dd.created_at ASC
         LIMIT $4
       `;
       const seriesResult = await database.query(seriesQuery, [
@@ -556,11 +573,15 @@ router.get('/widget-data/:widgetId', protect, async (req, res) => {
         parseInt(limit)
       ]);
 
-      seriesData[s.displayName] = seriesResult.rows.map(row => ({
-        timestamp: row.timestamp,
-        serialNumber: row.serial_number,
-        value: parseFloat(row.value) || 0
-      }));
+      seriesData[s.displayName] = {
+        data: seriesResult.rows.map(row => ({
+          timestamp: row.timestamp,
+          serialNumber: row.serial_number,
+          value: parseFloat(row.value) || 0
+        })),
+        unit: s.unit,
+        propertyName: s.propertyName
+      };
     }
 
     res.json({

@@ -6,7 +6,8 @@ import { useTheme } from '../../hooks/useTheme';
 import { apiService, DeviceChartData, HierarchyChartData, Device } from '../../services/api';
 import DynamicDashboard from './DynamicDashboard';
 import WidgetRenderer from './WidgetRenderer';
-import { Calendar, ChevronDown, Check } from 'lucide-react';
+import AddWidgetModal from './AddWidgetModal';
+import { Calendar, ChevronDown, Check, Plus } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import MetricsCards from './MetricsCards';
 import FlowRateCharts from './FlowRateCharts';
@@ -179,6 +180,8 @@ const DashboardContent: React.FC<DashboardContentProps> = ({
   const [widgets, setWidgets] = useState<WidgetConfig[]>([]);
   const [dashboardConfig, setDashboardConfig] = useState<any>(null);
   const [widgetsLoaded, setWidgetsLoaded] = useState(false);
+  const [showAddWidgetModal, setShowAddWidgetModal] = useState(false);
+  const [userRole, setUserRole] = useState<string>('');
 
   // Time range options
   const timeRangeOptions = [
@@ -201,6 +204,11 @@ const DashboardContent: React.FC<DashboardContentProps> = ({
       if (!token) return;
 
       try {
+        const userResponse = await apiService.getCurrentUser(token);
+        if (userResponse.success && userResponse.data) {
+          setUserRole(userResponse.data.user.role);
+        }
+
         const dashboardsResponse = await apiService.getDashboards(token);
 
         if (dashboardsResponse.success && dashboardsResponse.data && dashboardsResponse.data.length > 0) {
@@ -460,6 +468,19 @@ const DashboardContent: React.FC<DashboardContentProps> = ({
             </div>
 
             <div className="flex items-center gap-3">
+              {userRole === 'admin' && (
+                <button
+                  onClick={() => setShowAddWidgetModal(true)}
+                  className={`flex items-center gap-2 rounded-lg px-4 py-2 font-medium transition-colors ${
+                    theme === 'dark'
+                      ? 'bg-blue-600 text-white hover:bg-blue-700'
+                      : 'bg-blue-500 text-white hover:bg-blue-600'
+                  }`}
+                >
+                  <Plus className="h-4 w-4" />
+                  Add Widget
+                </button>
+              )}
               <AnimatedSelect
                 value={timeRange}
                 onChange={handleTimeRangeChange}
@@ -509,6 +530,23 @@ const DashboardContent: React.FC<DashboardContentProps> = ({
           </div>
         </>
       )}
+
+      <AddWidgetModal
+        isOpen={showAddWidgetModal}
+        onClose={() => setShowAddWidgetModal(false)}
+        onSuccess={async () => {
+          if (token) {
+            const dashboardsResponse = await apiService.getDashboards(token);
+            if (dashboardsResponse.success && dashboardsResponse.data && dashboardsResponse.data.length > 0) {
+              const firstDashboard = dashboardsResponse.data[0];
+              const widgetsResponse = await apiService.getDashboardWidgets(firstDashboard.id, token);
+              if (widgetsResponse.success && widgetsResponse.data) {
+                setWidgets(widgetsResponse.data.widgets);
+              }
+            }
+          }
+        }}
+      />
     </div>
   );
 };

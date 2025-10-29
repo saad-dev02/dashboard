@@ -896,11 +896,31 @@ class ApiService {
     widgetCount: number;
     createdAt: string;
   }>>> {
-    return this.makeRequest('/widgets/dashboards', {
+    return this.makeRequest('/widgets/user-dashboard', {
       method: 'GET',
       headers: {
         Authorization: `Bearer ${token}`,
       },
+    }).then(response => {
+      if (response.success && response.data) {
+        const dashboard = response.data.dashboard;
+        if (dashboard) {
+          return {
+            success: true,
+            message: response.message,
+            data: [{
+              id: dashboard.id,
+              name: dashboard.name,
+              description: dashboard.description,
+              version: dashboard.version,
+              isActive: true,
+              widgetCount: response.data.widgets?.length || 0,
+              createdAt: new Date().toISOString()
+            }]
+          };
+        }
+      }
+      return { success: true, message: 'No dashboards', data: [] };
     });
   }
 
@@ -911,6 +931,7 @@ class ApiService {
       description: string;
       gridConfig: any;
       version: number;
+      canEdit: boolean;
     };
     widgets: Array<{
       layoutId: string;
@@ -926,7 +947,7 @@ class ApiService {
       displayOrder: number;
     }>;
   }>> {
-    return this.makeRequest(`/widgets/dashboard/${dashboardId}`, {
+    return this.makeRequest('/widgets/user-dashboard', {
       method: 'GET',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -964,7 +985,7 @@ class ApiService {
     }>,
     token: string
   ): Promise<ApiResponse<{ message: string }>> {
-    return this.makeRequest(`/widgets/dashboard/${dashboardId}/layout`, {
+    return this.makeRequest('/widgets/update-layout', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
