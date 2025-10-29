@@ -1,0 +1,698 @@
+{
+  "info": {
+    "name": "11 - Advanced Widget Management",
+    "description": "Complete widget management system with device type mapping and data loading",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{authToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "Device Type Management",
+      "item": [
+        {
+          "name": "Get All Device Types",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/widgets/device-types",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "widgets", "device-types"]
+            },
+            "description": "Get all available device types"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Device Type Properties",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/widgets/device-types/:deviceTypeId/properties",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "widgets", "device-types", ":deviceTypeId", "properties"],
+              "variable": [
+                {
+                  "key": "deviceTypeId",
+                  "value": "1",
+                  "description": "Device Type ID (1=MPFM, 2=Pressure, etc.)"
+                }
+              ]
+            },
+            "description": "Get all available properties for a specific device type from device_data_mapping"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Widget Types",
+      "item": [
+        {
+          "name": "Get All Widget Types",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/widgets/types",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "widgets", "types"]
+            },
+            "description": "Get all available widget types (kpi, line_chart, fractions_chart, etc.)"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Widget Definitions",
+      "item": [
+        {
+          "name": "Get All Widget Definitions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/widgets/definitions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "widgets", "definitions"]
+            },
+            "description": "Get all available widget definitions"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Widget - Simple Line Chart",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Temperature Chart\",\n  \"description\": \"MPFM Temperature Line Chart\",\n  \"widgetTypeId\": \"{{lineChartTypeId}}\",\n  \"deviceTypeId\": 1,\n  \"propertyName\": \"Temperature\",\n  \"displayName\": \"Temperature Chart\",\n  \"numberOfSeries\": 1,\n  \"chartConfig\": {\n    \"xAxis\": \"time\",\n    \"yAxis\": \"temperature\",\n    \"height\": 300,\n    \"width\": 400\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/widgets/definitions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "widgets", "definitions"]
+            },
+            "description": "Create a new widget definition for MPFM Temperature"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Widget - Multi-Series Chart",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Flow Rates Chart\",\n  \"description\": \"MPFM Flow Rates (OFR, WFR, GFR)\",\n  \"widgetTypeId\": \"{{lineChartTypeId}}\",\n  \"deviceTypeId\": 1,\n  \"propertyName\": \"OFR\",\n  \"displayName\": \"Flow Rates\",\n  \"numberOfSeries\": 3,\n  \"seriesConfig\": [\n    {\n      \"name\": \"OFR\",\n      \"property\": \"OfrAVG\",\n      \"color\": \"#F56C44\",\n      \"unit\": \"l/min\"\n    },\n    {\n      \"name\": \"WFR\",\n      \"property\": \"WfrAVG\",\n      \"color\": \"#46B8E9\",\n      \"unit\": \"l/min\"\n    },\n    {\n      \"name\": \"GFR\",\n      \"property\": \"GfrAVG\",\n      \"color\": \"#38BF9D\",\n      \"unit\": \"l/min\"\n    }\n  ],\n  \"chartConfig\": {\n    \"height\": 400,\n    \"width\": 600,\n    \"showLegend\": true\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/widgets/definitions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "widgets", "definitions"]
+            },
+            "description": "Create a multi-series widget for flow rates"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Widget - KPI Card",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Pressure KPI\",\n  \"description\": \"Pressure Sensor KPI Card\",\n  \"widgetTypeId\": \"{{kpiTypeId}}\",\n  \"deviceTypeId\": 2,\n  \"propertyName\": \"Pressure\",\n  \"displayName\": \"Pressure\",\n  \"numberOfSeries\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/widgets/definitions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "widgets", "definitions"]
+            },
+            "description": "Create a KPI card widget for pressure sensors"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Widget Definition",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Temperature Chart\",\n  \"description\": \"Updated description\",\n  \"dataSourceConfig\": {\n    \"deviceTypeId\": 1,\n    \"propertyName\": \"Temperature\",\n    \"dataSourceProperty\": \"TempAVG\",\n    \"displayName\": \"Avg Temperature\",\n    \"unit\": \"°C\",\n    \"numberOfSeries\": 1\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/widgets/definitions/:widgetId",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "widgets", "definitions", ":widgetId"],
+              "variable": [
+                {
+                  "key": "widgetId",
+                  "value": "{{widgetDefinitionId}}"
+                }
+              ]
+            },
+            "description": "Update an existing widget definition"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Dashboard Management",
+      "item": [
+        {
+          "name": "Get All Dashboards",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/widgets/dashboards",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "widgets", "dashboards"]
+            },
+            "description": "Get all dashboards for current user"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Dashboard with Widgets",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/widgets/dashboard/:dashboardId",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "widgets", "dashboard", ":dashboardId"],
+              "variable": [
+                {
+                  "key": "dashboardId",
+                  "value": "{{dashboardId}}"
+                }
+              ]
+            },
+            "description": "Get specific dashboard with all its widgets"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Dashboard",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Custom Production Dashboard\",\n  \"description\": \"Custom dashboard for production monitoring\",\n  \"gridConfig\": {\n    \"cols\": 12,\n    \"rowHeight\": 100,\n    \"margin\": [10, 10],\n    \"breakpoints\": {\n      \"lg\": 1200,\n      \"md\": 996,\n      \"sm\": 768,\n      \"xs\": 480,\n      \"xxs\": 0\n    },\n    \"containerPadding\": [10, 10]\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/widgets/dashboards",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "widgets", "dashboards"]
+            },
+            "description": "Create a new dashboard"
+          },
+          "response": []
+        },
+        {
+          "name": "Add Widget to Dashboard",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"widgetDefinitionId\": \"{{widgetDefinitionId}}\",\n  \"layoutConfig\": {\n    \"x\": 0,\n    \"y\": 0,\n    \"w\": 4,\n    \"h\": 3,\n    \"minW\": 2,\n    \"minH\": 2,\n    \"static\": false\n  },\n  \"instanceConfig\": {\n    \"refreshInterval\": 5000,\n    \"customTitle\": \"My Custom Widget\"\n  },\n  \"displayOrder\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/widgets/dashboard/:dashboardId/widget",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "widgets", "dashboard", ":dashboardId", "widget"],
+              "variable": [
+                {
+                  "key": "dashboardId",
+                  "value": "{{dashboardId}}"
+                }
+              ]
+            },
+            "description": "Add a widget to a dashboard"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Widget Layout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"layouts\": [\n    {\n      \"layoutId\": \"{{layoutId1}}\",\n      \"layoutConfig\": {\n        \"x\": 0,\n        \"y\": 0,\n        \"w\": 3,\n        \"h\": 2,\n        \"minW\": 2,\n        \"minH\": 1,\n        \"static\": false\n      }\n    },\n    {\n      \"layoutId\": \"{{layoutId2}}\",\n      \"layoutConfig\": {\n        \"x\": 3,\n        \"y\": 0,\n        \"w\": 3,\n        \"h\": 2,\n        \"minW\": 2,\n        \"minH\": 1,\n        \"static\": false\n      }\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/widgets/dashboard/:dashboardId/layout",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "widgets", "dashboard", ":dashboardId", "layout"],
+              "variable": [
+                {
+                  "key": "dashboardId",
+                  "value": "{{dashboardId}}"
+                }
+              ]
+            },
+            "description": "Update widget positions and sizes (drag-drop functionality)"
+          },
+          "response": []
+        },
+        {
+          "name": "Remove Widget from Dashboard",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/widgets/dashboard/:dashboardId/layout/:layoutId",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "widgets", "dashboard", ":dashboardId", "layout", ":layoutId"],
+              "variable": [
+                {
+                  "key": "dashboardId",
+                  "value": "{{dashboardId}}"
+                },
+                {
+                  "key": "layoutId",
+                  "value": "{{layoutId}}"
+                }
+              ]
+            },
+            "description": "Remove a widget from a dashboard"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Widget Data Loading",
+      "item": [
+        {
+          "name": "Get Widget Historical Data",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/widgets/data/:widgetId?limit=100&timeRange=24h",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "widgets", "data", ":widgetId"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "100",
+                  "description": "Number of records to fetch"
+                },
+                {
+                  "key": "timeRange",
+                  "value": "24h",
+                  "description": "Time range: 1h, 6h, 24h, 7d, 30d"
+                }
+              ],
+              "variable": [
+                {
+                  "key": "widgetId",
+                  "value": "{{widgetDefinitionId}}"
+                }
+              ]
+            },
+            "description": "Get historical data for a widget from device_data table based on widget configuration"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Widget Latest Data",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/widgets/data/:widgetId/latest",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "widgets", "data", ":widgetId", "latest"],
+              "variable": [
+                {
+                  "key": "widgetId",
+                  "value": "{{widgetDefinitionId}}"
+                }
+              ]
+            },
+            "description": "Get latest data for a widget from device_latest table with aggregation"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Widget Data - 1 Hour Range",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/widgets/data/:widgetId?limit=50&timeRange=1h",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "widgets", "data", ":widgetId"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50"
+                },
+                {
+                  "key": "timeRange",
+                  "value": "1h"
+                }
+              ],
+              "variable": [
+                {
+                  "key": "widgetId",
+                  "value": "{{widgetDefinitionId}}"
+                }
+              ]
+            },
+            "description": "Get last 1 hour of data"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Widget Data - 7 Days Range",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/widgets/data/:widgetId?limit=1000&timeRange=7d",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "widgets", "data", ":widgetId"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "1000"
+                },
+                {
+                  "key": "timeRange",
+                  "value": "7d"
+                }
+              ],
+              "variable": [
+                {
+                  "key": "widgetId",
+                  "value": "{{widgetDefinitionId}}"
+                }
+              ]
+            },
+            "description": "Get last 7 days of data"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Complete Workflow Examples",
+      "item": [
+        {
+          "name": "1. Setup - Get Device Types",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    if (response.data && response.data.length > 0) {",
+                  "        pm.environment.set('deviceTypeId', response.data[0].id);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/widgets/device-types",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "widgets", "device-types"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "2. Get Available Properties",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    console.log('Available properties:', response.data);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/widgets/device-types/{{deviceTypeId}}/properties",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "widgets", "device-types", "{{deviceTypeId}}", "properties"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "3. Get Widget Types",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    const lineChart = response.data.find(t => t.name === 'line_chart');",
+                  "    if (lineChart) {",
+                  "        pm.environment.set('lineChartTypeId', lineChart.id);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/widgets/types",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "widgets", "types"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "4. Create Widget Definition",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.environment.set('widgetDefinitionId', response.data.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test Temperature Widget\",\n  \"description\": \"MPFM Temperature Chart\",\n  \"widgetTypeId\": \"{{lineChartTypeId}}\",\n  \"deviceTypeId\": 1,\n  \"propertyName\": \"Temperature\",\n  \"displayName\": \"Temperature\",\n  \"numberOfSeries\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/widgets/definitions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "widgets", "definitions"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "5. Create Dashboard",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.environment.set('dashboardId', response.data.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test Dashboard\",\n  \"description\": \"Testing dashboard creation\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/widgets/dashboards",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "widgets", "dashboards"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "6. Add Widget to Dashboard",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.environment.set('layoutId', response.data.layoutId);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"widgetDefinitionId\": \"{{widgetDefinitionId}}\",\n  \"layoutConfig\": {\n    \"x\": 0,\n    \"y\": 0,\n    \"w\": 4,\n    \"h\": 3,\n    \"minW\": 2,\n    \"minH\": 2,\n    \"static\": false\n  },\n  \"displayOrder\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/widgets/dashboard/{{dashboardId}}/widget",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "widgets", "dashboard", "{{dashboardId}}", "widget"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "7. Get Widget Data",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/widgets/data/{{widgetDefinitionId}}?limit=50&timeRange=24h",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "widgets", "data", "{{widgetDefinitionId}}"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50"
+                },
+                {
+                  "key": "timeRange",
+                  "value": "24h"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "8. Get Latest Widget Data",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/widgets/data/{{widgetDefinitionId}}/latest",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "widgets", "data", "{{widgetDefinitionId}}", "latest"]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000",
+      "type": "string"
+    }
+  ]
+}

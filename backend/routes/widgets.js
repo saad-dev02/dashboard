@@ -351,18 +351,114 @@ router.get('/definitions', protect, async (req, res) => {
   }
 });
 
+// GET /api/widgets/device-types
+// Get all device types
+router.get('/device-types', protect, async (req, res) => {
+  try {
+    const result = await database.query('SELECT id, type_name, logo FROM device_type ORDER BY type_name');
+
+    res.json({
+      success: true,
+      data: result.rows
+    });
+  } catch (error) {
+    console.error('Error fetching device types:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch device types',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/widgets/device-types/:deviceTypeId/properties
+// Get available properties for a device type from device_data_mapping
+router.get('/device-types/:deviceTypeId/properties', protect, async (req, res) => {
+  try {
+    const { deviceTypeId } = req.params;
+
+    const result = await database.query(`
+      SELECT
+        id,
+        variable_name,
+        variable_tag,
+        data_type,
+        unit,
+        ui_order
+      FROM device_data_mapping
+      WHERE device_type_id = $1
+      ORDER BY ui_order, variable_name
+    `, [deviceTypeId]);
+
+    res.json({
+      success: true,
+      data: result.rows
+    });
+  } catch (error) {
+    console.error('Error fetching device properties:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch device properties',
+      error: error.message
+    });
+  }
+});
+
 // POST /api/widgets/definitions
-// Create a new widget definition
+// Create a new widget definition with device type and property mapping
 router.post('/definitions', protect, async (req, res) => {
   try {
-    const { name, description, widgetTypeId, dataSourceConfig } = req.body;
+    const {
+      name,
+      description,
+      widgetTypeId,
+      deviceTypeId,
+      propertyName,
+      displayName,
+      numberOfSeries,
+      seriesConfig,
+      chartConfig
+    } = req.body;
     const userId = req.user.id;
 
-    if (!name || !widgetTypeId || !dataSourceConfig) {
+    if (!name || !widgetTypeId) {
       return res.status(400).json({
         success: false,
-        message: 'name, widgetTypeId, and dataSourceConfig are required'
+        message: 'name and widgetTypeId are required'
       });
+    }
+
+    let dataSourceConfig = {};
+
+    if (deviceTypeId && propertyName) {
+      const mappingResult = await database.query(`
+        SELECT variable_tag, unit, data_type
+        FROM device_data_mapping
+        WHERE device_type_id = $1 AND variable_name = $2
+      `, [deviceTypeId, propertyName]);
+
+      if (mappingResult.rows.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: `Property ${propertyName} not found for device type ${deviceTypeId}`
+        });
+      }
+
+      const mapping = mappingResult.rows[0];
+
+      dataSourceConfig = {
+        deviceTypeId: parseInt(deviceTypeId),
+        propertyName: propertyName,
+        dataSourceProperty: mapping.variable_tag,
+        displayName: displayName || propertyName,
+        unit: mapping.unit,
+        dataType: mapping.data_type,
+        numberOfSeries: numberOfSeries || 1,
+        seriesConfig: seriesConfig || [],
+        chartConfig: chartConfig || {}
+      };
+    } else if (req.body.dataSourceConfig) {
+      dataSourceConfig = req.body.dataSourceConfig;
     }
 
     const result = await database.query(`
@@ -387,7 +483,8 @@ router.post('/definitions', protect, async (req, res) => {
     res.json({
       success: true,
       data: {
-        id: result.rows[0].id
+        id: result.rows[0].id,
+        dataSourceConfig
       },
       message: 'Widget definition created successfully'
     });
@@ -462,6 +559,214 @@ router.put('/definitions/:id', protect, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to update widget definition',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/widgets/data/:widgetId
+// Get widget data based on its configuration
+router.get('/data/:widgetId', protect, async (req, res) => {
+  try {
+    const { widgetId } = req.params;
+    const { limit = 100, timeRange = '24h' } = req.query;
+    const companyId = req.user.company_id;
+
+    const widgetResult = await database.query(`
+      SELECT
+        wd.data_source_config,
+        wt.component_name
+      FROM widget_definitions wd
+      INNER JOIN widget_types wt ON wd.widget_type_id = wt.id
+      WHERE wd.id = $1
+    `, [widgetId]);
+
+    if (widgetResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Widget not found'
+      });
+    }
+
+    const widget = widgetResult.rows[0];
+    const dataSourceConfig = widget.data_source_config;
+
+    if (!dataSourceConfig.dataSourceProperty) {
+      return res.json({
+        success: true,
+        data: [],
+        message: 'No data source property configured'
+      });
+    }
+
+    let timeFilter = '';
+    if (timeRange === '1h') timeFilter = "AND dd.created_at >= NOW() - INTERVAL '1 hour'";
+    else if (timeRange === '6h') timeFilter = "AND dd.created_at >= NOW() - INTERVAL '6 hours'";
+    else if (timeRange === '24h') timeFilter = "AND dd.created_at >= NOW() - INTERVAL '24 hours'";
+    else if (timeRange === '7d') timeFilter = "AND dd.created_at >= NOW() - INTERVAL '7 days'";
+    else if (timeRange === '30d') timeFilter = "AND dd.created_at >= NOW() - INTERVAL '30 days'";
+
+    let query = '';
+    let params = [];
+
+    if (dataSourceConfig.deviceTypeId) {
+      query = `
+        SELECT
+          dd.created_at as timestamp,
+          dd.serial_number,
+          dd.data->>$1 as value,
+          d.metadata->>'location' as location
+        FROM device_data dd
+        INNER JOIN device d ON dd.device_id = d.id
+        WHERE d.company_id = $2
+          AND d.device_type_id = $3
+          ${timeFilter}
+        ORDER BY dd.created_at DESC
+        LIMIT $4
+      `;
+      params = [dataSourceConfig.dataSourceProperty, companyId, dataSourceConfig.deviceTypeId, parseInt(limit)];
+    } else {
+      query = `
+        SELECT
+          dd.created_at as timestamp,
+          dd.serial_number,
+          dd.data->>$1 as value
+        FROM device_data dd
+        INNER JOIN device d ON dd.device_id = d.id
+        WHERE d.company_id = $2
+          ${timeFilter}
+        ORDER BY dd.created_at DESC
+        LIMIT $3
+      `;
+      params = [dataSourceConfig.dataSourceProperty, companyId, parseInt(limit)];
+    }
+
+    const dataResult = await database.query(query, params);
+
+    const formattedData = dataResult.rows.map(row => ({
+      timestamp: row.timestamp,
+      serialNumber: row.serial_number,
+      value: parseFloat(row.value) || 0,
+      location: row.location
+    }));
+
+    res.json({
+      success: true,
+      data: formattedData,
+      config: dataSourceConfig
+    });
+  } catch (error) {
+    console.error('Error fetching widget data:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch widget data',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/widgets/data/:widgetId/latest
+// Get latest widget data from device_latest
+router.get('/data/:widgetId/latest', protect, async (req, res) => {
+  try {
+    const { widgetId } = req.params;
+    const companyId = req.user.company_id;
+
+    const widgetResult = await database.query(`
+      SELECT
+        wd.data_source_config,
+        wt.component_name
+      FROM widget_definitions wd
+      INNER JOIN widget_types wt ON wd.widget_type_id = wt.id
+      WHERE wd.id = $1
+    `, [widgetId]);
+
+    if (widgetResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Widget not found'
+      });
+    }
+
+    const widget = widgetResult.rows[0];
+    const dataSourceConfig = widget.data_source_config;
+
+    if (!dataSourceConfig.dataSourceProperty) {
+      return res.json({
+        success: true,
+        data: null,
+        message: 'No data source property configured'
+      });
+    }
+
+    let query = '';
+    let params = [];
+
+    if (dataSourceConfig.deviceTypeId) {
+      query = `
+        SELECT
+          dl.updated_at as timestamp,
+          dl.serial_number,
+          dl.data->>$1 as value,
+          d.metadata->>'location' as location,
+          dt.type_name as device_type
+        FROM device_latest dl
+        INNER JOIN device d ON dl.device_id = d.id
+        INNER JOIN device_type dt ON d.device_type_id = dt.id
+        WHERE d.company_id = $2
+          AND d.device_type_id = $3
+        ORDER BY dl.updated_at DESC
+      `;
+      params = [dataSourceConfig.dataSourceProperty, companyId, dataSourceConfig.deviceTypeId];
+    } else {
+      query = `
+        SELECT
+          dl.updated_at as timestamp,
+          dl.serial_number,
+          dl.data->>$1 as value,
+          d.metadata->>'location' as location,
+          dt.type_name as device_type
+        FROM device_latest dl
+        INNER JOIN device d ON dl.device_id = d.id
+        INNER JOIN device_type dt ON d.device_type_id = dt.id
+        WHERE d.company_id = $2
+        ORDER BY dl.updated_at DESC
+      `;
+      params = [dataSourceConfig.dataSourceProperty, companyId];
+    }
+
+    const dataResult = await database.query(query, params);
+
+    const formattedData = dataResult.rows.map(row => ({
+      timestamp: row.timestamp,
+      serialNumber: row.serial_number,
+      value: parseFloat(row.value) || 0,
+      location: row.location,
+      deviceType: row.device_type
+    }));
+
+    let aggregatedValue = null;
+    if (formattedData.length > 0) {
+      const sum = formattedData.reduce((acc, item) => acc + item.value, 0);
+      aggregatedValue = sum / formattedData.length;
+    }
+
+    res.json({
+      success: true,
+      data: {
+        latest: formattedData,
+        aggregatedValue,
+        count: formattedData.length,
+        unit: dataSourceConfig.unit,
+        displayName: dataSourceConfig.displayName
+      },
+      config: dataSourceConfig
+    });
+  } catch (error) {
+    console.error('Error fetching latest widget data:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch latest widget data',
       error: error.message
     });
   }
