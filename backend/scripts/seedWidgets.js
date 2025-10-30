@@ -106,32 +106,33 @@ const seedWidgets = async () => {
 
     const mpfmDeviceTypeId = mpfmDeviceTypeResult.rows[0].id;
 
-    const ofrMappingResult = await client.query(
-      `SELECT id, variable_name, variable_tag, unit FROM device_data_mapping WHERE device_type_id = $1 AND variable_tag = 'OFR' LIMIT 1`,
-      [mpfmDeviceTypeId]
-    );
-    const wfrMappingResult = await client.query(
-      `SELECT id, variable_name, variable_tag, unit FROM device_data_mapping WHERE device_type_id = $1 AND variable_tag = 'WFR' LIMIT 1`,
-      [mpfmDeviceTypeId]
-    );
-    const gfrMappingResult = await client.query(
-      `SELECT id, variable_name, variable_tag, unit FROM device_data_mapping WHERE device_type_id = $1 AND variable_tag = 'GFR' LIMIT 1`,
-      [mpfmDeviceTypeId]
-    );
-    const gvfMappingResult = await client.query(
-      `SELECT id, variable_name, variable_tag, unit FROM device_data_mapping WHERE device_type_id = $1 AND variable_tag = 'GVF' LIMIT 1`,
-      [mpfmDeviceTypeId]
-    );
-    const wlrMappingResult = await client.query(
-      `SELECT id, variable_name, variable_tag, unit FROM device_data_mapping WHERE device_type_id = $1 AND variable_tag = 'WLR' LIMIT 1`,
-      [mpfmDeviceTypeId]
-    );
+    const ensureMapping = async (variableTag, variableName, unit) => {
+      let result = await client.query(
+        `SELECT id, variable_name, variable_tag, unit FROM device_data_mapping WHERE device_type_id = $1 AND variable_tag = $2 LIMIT 1`,
+        [mpfmDeviceTypeId, variableTag]
+      );
 
-    const chartWidgets = [];
+      if (result.rows.length === 0) {
+        console.log(`⚠️  Creating missing mapping for ${variableTag}`);
+        result = await client.query(
+          `INSERT INTO device_data_mapping (device_type_id, variable_name, variable_tag, unit, data_type)
+           VALUES ($1, $2, $3, $4, 'numeric')
+           RETURNING id, variable_name, variable_tag, unit`,
+          [mpfmDeviceTypeId, variableName, variableTag, unit]
+        );
+      }
 
-    if (ofrMappingResult.rows.length > 0) {
-      const ofrMapping = ofrMappingResult.rows[0];
-      chartWidgets.push({
+      return result.rows[0];
+    };
+
+    const ofrMapping = await ensureMapping('OFR', 'Oil Flow Rate', 'l/min');
+    const wfrMapping = await ensureMapping('WFR', 'Water Flow Rate', 'l/min');
+    const gfrMapping = await ensureMapping('GFR', 'Gas Flow Rate', 'l/min');
+    const gvfMapping = await ensureMapping('GVF', 'Gas Volume Fraction', '%');
+    const wlrMapping = await ensureMapping('WLR', 'Water Liquid Ratio', '%');
+
+    const chartWidgets = [
+      {
         name: 'OFR Chart',
         description: 'Oil Flow Rate Line Chart',
         widget_type_id: widgetTypeIds.line_chart,
@@ -147,12 +148,8 @@ const seedWidgets = async () => {
             dataType: 'numeric'
           }]
         }
-      });
-    }
-
-    if (wfrMappingResult.rows.length > 0) {
-      const wfrMapping = wfrMappingResult.rows[0];
-      chartWidgets.push({
+      },
+      {
         name: 'WFR Chart',
         description: 'Water Flow Rate Line Chart',
         widget_type_id: widgetTypeIds.line_chart,
@@ -168,12 +165,8 @@ const seedWidgets = async () => {
             dataType: 'numeric'
           }]
         }
-      });
-    }
-
-    if (gfrMappingResult.rows.length > 0) {
-      const gfrMapping = gfrMappingResult.rows[0];
-      chartWidgets.push({
+      },
+      {
         name: 'GFR Chart',
         description: 'Gas Flow Rate Line Chart',
         widget_type_id: widgetTypeIds.line_chart,
@@ -189,15 +182,11 @@ const seedWidgets = async () => {
             dataType: 'numeric'
           }]
         }
-      });
-    }
+      }
+    ];
 
-    const otherWidgets = [];
-
-    if (gvfMappingResult.rows.length > 0 && wlrMappingResult.rows.length > 0) {
-      const gvfMapping = gvfMappingResult.rows[0];
-      const wlrMapping = wlrMappingResult.rows[0];
-      otherWidgets.push({
+    const otherWidgets = [
+      {
         name: 'Fractions Chart',
         description: 'GVF and WLR Fractions Chart',
         widget_type_id: widgetTypeIds.line_chart,
@@ -223,8 +212,8 @@ const seedWidgets = async () => {
             }
           ]
         }
-      });
-    }
+      }
+    ];
 
     otherWidgets.push({
       name: 'GVF/WLR Donut Charts',
@@ -295,10 +284,8 @@ const seedWidgets = async () => {
     for (const layout of layouts) {
       const widgetDefId = widgetDefIds[layout.widget];
 
-      // Skip if widget definition doesn't exist (conditional widgets that weren't created)
       if (!widgetDefId) {
-        console.log(`⚠️  Skipping layout for '${layout.widget}' - widget definition not found`);
-        continue;
+        throw new Error(`Widget definition not found for '${layout.widget}'. This should not happen.`);
       }
 
       await client.query(`
