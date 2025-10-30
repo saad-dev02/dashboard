@@ -25,8 +25,7 @@ const seedWidgets = async () => {
 
     const widgetTypes = [
       { name: 'kpi', component_name: 'MetricsCard', default_config: { refreshInterval: 5000 } },
-      { name: 'line_chart', component_name: 'FlowRateChart', default_config: { refreshInterval: 5000 } },
-      { name: 'fractions_chart', component_name: 'FractionsChart', default_config: { refreshInterval: 5000 } },
+      { name: 'line_chart', component_name: 'CustomLineChart', default_config: { refreshInterval: 5000 } },
       { name: 'donut_chart', component_name: 'GVFWLRChart', default_config: { refreshInterval: 5000 } },
       { name: 'map', component_name: 'ProductionMap', default_config: { refreshInterval: 30000 } }
     ];
@@ -97,71 +96,155 @@ const seedWidgets = async () => {
       }
     ];
 
-    const chartWidgets = [
-      {
+    const mpfmDeviceTypeResult = await client.query(
+      `SELECT id FROM device_type WHERE type_name = 'MPFM' LIMIT 1`
+    );
+
+    if (mpfmDeviceTypeResult.rows.length === 0) {
+      throw new Error('MPFM device type not found. Please seed device types first.');
+    }
+
+    const mpfmDeviceTypeId = mpfmDeviceTypeResult.rows[0].id;
+
+    const ofrMappingResult = await client.query(
+      `SELECT id, variable_name, variable_tag, unit FROM device_data_mapping WHERE device_type_id = $1 AND variable_tag = 'OFR' LIMIT 1`,
+      [mpfmDeviceTypeId]
+    );
+    const wfrMappingResult = await client.query(
+      `SELECT id, variable_name, variable_tag, unit FROM device_data_mapping WHERE device_type_id = $1 AND variable_tag = 'WFR' LIMIT 1`,
+      [mpfmDeviceTypeId]
+    );
+    const gfrMappingResult = await client.query(
+      `SELECT id, variable_name, variable_tag, unit FROM device_data_mapping WHERE device_type_id = $1 AND variable_tag = 'GFR' LIMIT 1`,
+      [mpfmDeviceTypeId]
+    );
+    const gvfMappingResult = await client.query(
+      `SELECT id, variable_name, variable_tag, unit FROM device_data_mapping WHERE device_type_id = $1 AND variable_tag = 'GVF' LIMIT 1`,
+      [mpfmDeviceTypeId]
+    );
+    const wlrMappingResult = await client.query(
+      `SELECT id, variable_name, variable_tag, unit FROM device_data_mapping WHERE device_type_id = $1 AND variable_tag = 'WLR' LIMIT 1`,
+      [mpfmDeviceTypeId]
+    );
+
+    const chartWidgets = [];
+
+    if (ofrMappingResult.rows.length > 0) {
+      const ofrMapping = ofrMappingResult.rows[0];
+      chartWidgets.push({
         name: 'OFR Chart',
         description: 'Oil Flow Rate Line Chart',
         widget_type_id: widgetTypeIds.line_chart,
         data_source_config: {
-          metric: 'ofr',
-          unit: 'l/min',
-          title: 'OFR',
-          dataKey: 'ofr'
+          deviceTypeId: mpfmDeviceTypeId,
+          numberOfSeries: 1,
+          seriesConfig: [{
+            propertyId: ofrMapping.id,
+            propertyName: ofrMapping.variable_name,
+            displayName: 'OFR',
+            dataSourceProperty: ofrMapping.variable_tag,
+            unit: ofrMapping.unit,
+            dataType: 'numeric'
+          }]
         }
-      },
-      {
+      });
+    }
+
+    if (wfrMappingResult.rows.length > 0) {
+      const wfrMapping = wfrMappingResult.rows[0];
+      chartWidgets.push({
         name: 'WFR Chart',
         description: 'Water Flow Rate Line Chart',
         widget_type_id: widgetTypeIds.line_chart,
         data_source_config: {
-          metric: 'wfr',
-          unit: 'l/min',
-          title: 'WFR',
-          dataKey: 'wfr'
+          deviceTypeId: mpfmDeviceTypeId,
+          numberOfSeries: 1,
+          seriesConfig: [{
+            propertyId: wfrMapping.id,
+            propertyName: wfrMapping.variable_name,
+            displayName: 'WFR',
+            dataSourceProperty: wfrMapping.variable_tag,
+            unit: wfrMapping.unit,
+            dataType: 'numeric'
+          }]
         }
-      },
-      {
+      });
+    }
+
+    if (gfrMappingResult.rows.length > 0) {
+      const gfrMapping = gfrMappingResult.rows[0];
+      chartWidgets.push({
         name: 'GFR Chart',
         description: 'Gas Flow Rate Line Chart',
         widget_type_id: widgetTypeIds.line_chart,
         data_source_config: {
-          metric: 'gfr',
-          unit: 'l/min',
-          title: 'GFR',
-          dataKey: 'gfr'
+          deviceTypeId: mpfmDeviceTypeId,
+          numberOfSeries: 1,
+          seriesConfig: [{
+            propertyId: gfrMapping.id,
+            propertyName: gfrMapping.variable_name,
+            displayName: 'GFR',
+            dataSourceProperty: gfrMapping.variable_tag,
+            unit: gfrMapping.unit,
+            dataType: 'numeric'
+          }]
         }
-      }
-    ];
+      });
+    }
 
-    const otherWidgets = [
-      {
+    const otherWidgets = [];
+
+    if (gvfMappingResult.rows.length > 0 && wlrMappingResult.rows.length > 0) {
+      const gvfMapping = gvfMappingResult.rows[0];
+      const wlrMapping = wlrMappingResult.rows[0];
+      otherWidgets.push({
         name: 'Fractions Chart',
         description: 'GVF and WLR Fractions Chart',
-        widget_type_id: widgetTypeIds.fractions_chart,
+        widget_type_id: widgetTypeIds.line_chart,
         data_source_config: {
-          metrics: ['gvf', 'wlr'],
-          title: 'Fractions'
+          deviceTypeId: mpfmDeviceTypeId,
+          numberOfSeries: 2,
+          seriesConfig: [
+            {
+              propertyId: gvfMapping.id,
+              propertyName: gvfMapping.variable_name,
+              displayName: 'GVF',
+              dataSourceProperty: gvfMapping.variable_tag,
+              unit: gvfMapping.unit,
+              dataType: 'numeric'
+            },
+            {
+              propertyId: wlrMapping.id,
+              propertyName: wlrMapping.variable_name,
+              displayName: 'WLR',
+              dataSourceProperty: wlrMapping.variable_tag,
+              unit: wlrMapping.unit,
+              dataType: 'numeric'
+            }
+          ]
         }
-      },
-      {
-        name: 'GVF/WLR Donut Charts',
-        description: 'GVF and WLR Donut Charts',
-        widget_type_id: widgetTypeIds.donut_chart,
-        data_source_config: {
-          metrics: ['gvf', 'wlr'],
-          title: 'GVF/WLR'
-        }
-      },
-      {
-        name: 'Production Map',
-        description: 'Device Locations Map',
-        widget_type_id: widgetTypeIds.map,
-        data_source_config: {
-          showDevices: true,
-          showStatistics: true
-        }
+      });
+    }
+
+    otherWidgets.push({
+      name: 'GVF/WLR Donut Charts',
+      description: 'GVF and WLR Donut Charts',
+      widget_type_id: widgetTypeIds.donut_chart,
+      data_source_config: {
+        metrics: ['gvf', 'wlr'],
+        title: 'GVF/WLR'
       }
-    ];
+    });
+
+    otherWidgets.push({
+      name: 'Production Map',
+      description: 'Device Locations Map',
+      widget_type_id: widgetTypeIds.map,
+      data_source_config: {
+        showDevices: true,
+        showStatistics: true
+      }
+    });
 
     const allWidgets = [...kpiWidgets, ...chartWidgets, ...otherWidgets];
     const widgetDefIds = {};

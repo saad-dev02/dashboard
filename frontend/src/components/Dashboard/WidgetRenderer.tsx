@@ -1,8 +1,6 @@
 import React from 'react';
 import { useTheme } from '../../hooks/useTheme';
 import { DeviceChartData, HierarchyChartData } from '../../services/api';
-import FlowRateCharts from './FlowRateCharts';
-import FractionsChart from './FractionsChart';
 import GVFWLRCharts from './GVFWLRCharts';
 import ProductionMap from './ProductionMap';
 import CustomLineChart from './CustomLineChart';
@@ -81,23 +79,20 @@ const WidgetRenderer: React.FC<WidgetRendererProps> = ({
     return value;
   };
 
-  // Check if this is a custom widget (has seriesConfig in dataSourceConfig)
-  const isCustomWidget = dsConfig.seriesConfig && Array.isArray(dsConfig.seriesConfig) && dsConfig.seriesConfig.length > 0;
-
-  // Render custom widgets using CustomLineChart for ANY component type that has seriesConfig
-  if (isCustomWidget) {
-    return (
-      <div className="h-full">
-        <CustomLineChart
-          widgetConfig={widget}
-          timeRange={timeRange}
-        />
-      </div>
-    );
-  }
+  // Check if this is a line chart widget with seriesConfig
+  const isLineChartWidget = dsConfig.seriesConfig && Array.isArray(dsConfig.seriesConfig) && dsConfig.seriesConfig.length > 0;
 
   // Render based on component type
   switch (widget.component) {
+    case 'CustomLineChart':
+      return (
+        <div className="h-full">
+          <CustomLineChart
+            widgetConfig={widget}
+            timeRange={timeRange}
+          />
+        </div>
+      );
     case 'MetricsCard':
       if (dsConfig.metric === 'last_refresh') {
         const formattedTime = lastRefresh
@@ -194,30 +189,6 @@ const WidgetRenderer: React.FC<WidgetRendererProps> = ({
         </div>
       );
 
-    case 'FlowRateChart':
-      return (
-        <div className="h-full">
-          <FlowRateCharts
-            chartData={chartData}
-            hierarchyChartData={hierarchyChartData}
-            timeRange={timeRange}
-            isDeviceOffline={isDeviceOffline}
-            widgetConfigs={[widget]}
-          />
-        </div>
-      );
-
-    case 'FractionsChart':
-      return (
-        <div className="h-full">
-          <FractionsChart
-            chartData={chartData}
-            hierarchyChartData={hierarchyChartData}
-            isDeviceOffline={isDeviceOffline}
-            widgetConfig={widget}
-          />
-        </div>
-      );
 
     case 'GVFWLRChart':
       return (

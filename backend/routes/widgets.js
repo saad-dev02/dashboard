@@ -538,7 +538,7 @@ router.get('/widget-data/:widgetId', protect, async (req, res) => {
     if (!dataSourceConfig.seriesConfig || dataSourceConfig.seriesConfig.length === 0) {
       return res.json({
         success: true,
-        data: [],
+        data: {},
         config: dataSourceConfig,
         message: 'No series configured'
       });
@@ -557,15 +557,17 @@ router.get('/widget-data/:widgetId', protect, async (req, res) => {
         SELECT
           dd.created_at as timestamp,
           dd.serial_number,
-          (dd.data->>$1)::numeric as value
+          COALESCE((dd.data->>$1)::numeric, 0) as value
         FROM device_data dd
         INNER JOIN device d ON dd.device_id = d.id
         WHERE d.company_id = $2
           AND d.device_type_id = $3
           ${timeFilter}
+          AND dd.data ? $1
         ORDER BY dd.created_at ASC
         LIMIT $4
       `;
+
       const seriesResult = await database.query(seriesQuery, [
         s.dataSourceProperty,
         companyId,
@@ -579,7 +581,7 @@ router.get('/widget-data/:widgetId', protect, async (req, res) => {
           serialNumber: row.serial_number,
           value: parseFloat(row.value) || 0
         })),
-        unit: s.unit,
+        unit: s.unit || '',
         propertyName: s.propertyName
       };
     }
