@@ -1,8 +1,9 @@
-require('dotenv').config();
+require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 const database = require('../config/database');
 const seedCompanies = require('./seedCompanies');
 const seedAdmin = require('./seedAdmin');
 const seedHierarchy = require('./seedHierarchy');
+const seedDeviceDataMapping = require('./seedDeviceDataMapping');
 const seedAlarms = require('./seedAlarms');
 const seedWidgets = require('./seedWidgets');
 
@@ -27,6 +28,9 @@ const runAllSeeders = async () => {
 
     console.log('🏗️ Seeding hierarchy data...');
     await seedHierarchy();
+
+    console.log('🔗 Seeding device data mappings...');
+    await seedDeviceDataMapping();
 
     console.log('🚨 Seeding alarms data...');
     await seedAlarms();

@@ -106,30 +106,24 @@ const seedWidgets = async () => {
 
     const mpfmDeviceTypeId = mpfmDeviceTypeResult.rows[0].id;
 
-    const ensureMapping = async (variableTag, variableName, unit) => {
-      let result = await client.query(
+    const getMapping = async (variableTag) => {
+      const result = await client.query(
         `SELECT id, variable_name, variable_tag, unit FROM device_data_mapping WHERE device_type_id = $1 AND variable_tag = $2 LIMIT 1`,
         [mpfmDeviceTypeId, variableTag]
       );
 
       if (result.rows.length === 0) {
-        console.log(`⚠️  Creating missing mapping for ${variableTag}`);
-        result = await client.query(
-          `INSERT INTO device_data_mapping (device_type_id, variable_name, variable_tag, unit, data_type)
-           VALUES ($1, $2, $3, $4, 'numeric')
-           RETURNING id, variable_name, variable_tag, unit`,
-          [mpfmDeviceTypeId, variableName, variableTag, unit]
-        );
+        throw new Error(`Mapping not found for ${variableTag}. Please run seedDeviceDataMapping first.`);
       }
 
       return result.rows[0];
     };
 
-    const ofrMapping = await ensureMapping('OFR', 'Oil Flow Rate', 'l/min');
-    const wfrMapping = await ensureMapping('WFR', 'Water Flow Rate', 'l/min');
-    const gfrMapping = await ensureMapping('GFR', 'Gas Flow Rate', 'l/min');
-    const gvfMapping = await ensureMapping('GVF', 'Gas Volume Fraction', '%');
-    const wlrMapping = await ensureMapping('WLR', 'Water Liquid Ratio', '%');
+    const ofrMapping = await getMapping('OFR');
+    const wfrMapping = await getMapping('WFR');
+    const gfrMapping = await getMapping('GFR');
+    const gvfMapping = await getMapping('GVF');
+    const wlrMapping = await getMapping('WLR');
 
     const chartWidgets = [
       {
