@@ -71,7 +71,7 @@ const CustomLineChart: React.FC<CustomLineChartProps> = ({ widgetConfig, timeRan
       };
 
       const response = await fetch(
-        `http://localhost:5000/api/widgets/widget-data/${widgetConfig.widgetId}?timeRange=${timeRangeMap[timeRange]}&limit=100`,
+        `http://localhost:5000/api/widgets/widget-data/${widgetConfig.widgetId}?timeRange=${timeRangeMap[timeRange]}&limit=200`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -80,9 +80,11 @@ const CustomLineChart: React.FC<CustomLineChartProps> = ({ widgetConfig, timeRan
       );
 
       const result = await response.json();
+      console.log('Widget data response:', result);
 
       if (result.success && result.data) {
         const formattedData = formatChartData(result.data);
+        console.log('Formatted chart data:', formattedData);
         setChartData(formattedData.data);
         setSeriesKeys(formattedData.keys);
         setUnits(formattedData.units);
@@ -106,13 +108,15 @@ const CustomLineChart: React.FC<CustomLineChartProps> = ({ widgetConfig, timeRan
       keys.push(seriesName);
       unitsMap[seriesName] = series.unit || '';
 
-      series.data.forEach((point) => {
-        const timestamp = new Date(point.timestamp).getTime();
-        if (!dataMap[timestamp]) {
-          dataMap[timestamp] = { timestamp };
-        }
-        dataMap[timestamp][seriesName] = point.value;
-      });
+      if (series.data && Array.isArray(series.data)) {
+        series.data.forEach((point) => {
+          const timestamp = new Date(point.timestamp).getTime();
+          if (!dataMap[timestamp]) {
+            dataMap[timestamp] = { timestamp };
+          }
+          dataMap[timestamp][seriesName] = point.value;
+        });
+      }
     });
 
     const data = Object.values(dataMap).sort((a, b) => a.timestamp - b.timestamp);

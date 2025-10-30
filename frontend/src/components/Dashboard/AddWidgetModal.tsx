@@ -259,8 +259,11 @@ const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ isOpen, onClose, onSucc
               <h3 className={`mb-4 text-lg font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
                 Step 2: Select Widget Type
               </h3>
+              <p className={`mb-4 text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+                Choose the visualization type for your widget. Line Chart is recommended for time-series data.
+              </p>
               <div className="grid grid-cols-2 gap-4">
-                {widgetTypes.map((wt) => (
+                {widgetTypes.filter(wt => wt.name === 'line_chart').map((wt) => (
                   <button
                     key={wt.id}
                     onClick={() => setSelectedWidgetType(wt.id)}
@@ -274,6 +277,9 @@ const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ isOpen, onClose, onSucc
                   >
                     <div className={`text-lg font-medium ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
                       {wt.displayName}
+                    </div>
+                    <div className={`text-sm mt-1 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+                      Display data over time with interactive charts
                     </div>
                   </button>
                 ))}

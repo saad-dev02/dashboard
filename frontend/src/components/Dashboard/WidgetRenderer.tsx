@@ -84,8 +84,8 @@ const WidgetRenderer: React.FC<WidgetRendererProps> = ({
   // Check if this is a custom widget (has seriesConfig in dataSourceConfig)
   const isCustomWidget = dsConfig.seriesConfig && Array.isArray(dsConfig.seriesConfig) && dsConfig.seriesConfig.length > 0;
 
-  // Render custom widgets using CustomLineChart
-  if (isCustomWidget && widget.component === 'LineChart') {
+  // Render custom widgets using CustomLineChart for ANY component type that has seriesConfig
+  if (isCustomWidget) {
     return (
       <div className="h-full">
         <CustomLineChart
