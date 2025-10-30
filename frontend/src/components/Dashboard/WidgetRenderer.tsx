@@ -5,6 +5,7 @@ import FlowRateCharts from './FlowRateCharts';
 import FractionsChart from './FractionsChart';
 import GVFWLRCharts from './GVFWLRCharts';
 import ProductionMap from './ProductionMap';
+import CustomLineChart from './CustomLineChart';
 import { AlarmClock } from 'lucide-react';
 
 interface WidgetConfig {
@@ -79,6 +80,21 @@ const WidgetRenderer: React.FC<WidgetRendererProps> = ({
 
     return value;
   };
+
+  // Check if this is a custom widget (has seriesConfig in dataSourceConfig)
+  const isCustomWidget = dsConfig.seriesConfig && Array.isArray(dsConfig.seriesConfig) && dsConfig.seriesConfig.length > 0;
+
+  // Render custom widgets using CustomLineChart
+  if (isCustomWidget && widget.component === 'LineChart') {
+    return (
+      <div className="h-full">
+        <CustomLineChart
+          widgetConfig={widget}
+          timeRange={timeRange}
+        />
+      </div>
+    );
+  }
 
   // Render based on component type
   switch (widget.component) {
