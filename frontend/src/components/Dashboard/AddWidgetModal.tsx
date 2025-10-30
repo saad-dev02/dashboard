@@ -177,7 +177,7 @@ const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ isOpen, onClose, onSucc
           theme === 'dark' ? 'bg-[#0B1437]' : 'bg-white'
         }`}
       >
-        <div className="flex items-center justify-between border-b p-6 ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}">
+        <div className={`flex items-center justify-between border-b p-6 ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}>
           <h2 className={`text-2xl font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
             Add New Widget
           </h2>
@@ -193,23 +193,38 @@ const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ isOpen, onClose, onSucc
 
         <div className="p-6">
           <div className="mb-6 flex items-center justify-center space-x-4">
-            {[1, 2, 3].map((s) => (
-              <React.Fragment key={s}>
-                <div
-                  className={`flex h-10 w-10 items-center justify-center rounded-full ${
-                    step >= s
-                      ? 'bg-blue-500 text-white'
-                      : theme === 'dark'
-                      ? 'bg-gray-700 text-gray-400'
-                      : 'bg-gray-200 text-gray-500'
-                  }`}
-                >
-                  {step > s ? <Check className="h-5 w-5" /> : s}
-                </div>
-                {s < 3 && (
+            {[
+              { num: 1, label: 'Device' },
+              { num: 2, label: 'Widget Type' },
+              { num: 3, label: 'Properties' }
+            ].map((s, idx) => (
+              <React.Fragment key={s.num}>
+                <div className="flex flex-col items-center">
                   <div
-                    className={`h-1 w-16 ${
-                      step > s
+                    className={`flex h-10 w-10 items-center justify-center rounded-full ${
+                      step >= s.num
+                        ? 'bg-blue-500 text-white'
+                        : theme === 'dark'
+                        ? 'bg-gray-700 text-gray-400'
+                        : 'bg-gray-200 text-gray-500'
+                    }`}
+                  >
+                    {step > s.num ? <Check className="h-5 w-5" /> : s.num}
+                  </div>
+                  <span className={`mt-2 text-xs font-medium ${
+                    step >= s.num
+                      ? 'text-blue-500'
+                      : theme === 'dark'
+                      ? 'text-gray-500'
+                      : 'text-gray-400'
+                  }`}>
+                    {s.label}
+                  </span>
+                </div>
+                {idx < 2 && (
+                  <div
+                    className={`h-1 w-16 mt-0 mb-6 ${
+                      step > s.num
                         ? 'bg-blue-500'
                         : theme === 'dark'
                         ? 'bg-gray-700'
@@ -262,28 +277,39 @@ const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ isOpen, onClose, onSucc
               <p className={`mb-4 text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
                 Choose the visualization type for your widget. Line Chart is recommended for time-series data.
               </p>
-              <div className="grid grid-cols-2 gap-4">
-                {widgetTypes.filter(wt => wt.name === 'line_chart').map((wt) => (
-                  <button
-                    key={wt.id}
-                    onClick={() => setSelectedWidgetType(wt.id)}
-                    className={`rounded-lg border-2 p-4 text-left transition-all ${
-                      selectedWidgetType === wt.id
-                        ? 'border-blue-500 bg-blue-500 bg-opacity-10'
-                        : theme === 'dark'
-                        ? 'border-gray-700 hover:border-gray-600'
-                        : 'border-gray-200 hover:border-gray-300'
-                    }`}
-                  >
-                    <div className={`text-lg font-medium ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
-                      {wt.displayName}
+              {loading ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-4">
+                  {widgetTypes.filter(wt => wt.name === 'line_chart').map((wt) => (
+                    <button
+                      key={wt.id}
+                      onClick={() => setSelectedWidgetType(wt.id)}
+                      className={`rounded-lg border-2 p-4 text-left transition-all ${
+                        selectedWidgetType === wt.id
+                          ? 'border-blue-500 bg-blue-500 bg-opacity-10'
+                          : theme === 'dark'
+                          ? 'border-gray-700 hover:border-gray-600'
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      <div className={`text-lg font-medium ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+                        {wt.displayName}
+                      </div>
+                      <div className={`text-sm mt-1 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+                        Display data over time with interactive charts
+                      </div>
+                    </button>
+                  ))}
+                  {widgetTypes.filter(wt => wt.name === 'line_chart').length === 0 && (
+                    <div className={`col-span-2 text-center py-8 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+                      No widget types available
                     </div>
-                    <div className={`text-sm mt-1 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
-                      Display data over time with interactive charts
-                    </div>
-                  </button>
-                ))}
-              </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 

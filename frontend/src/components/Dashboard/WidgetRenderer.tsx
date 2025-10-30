@@ -1,10 +1,11 @@
 import React from 'react';
 import { useTheme } from '../../hooks/useTheme';
+import { useAuth } from '../../hooks/useAuth';
 import { DeviceChartData, HierarchyChartData } from '../../services/api';
 import GVFWLRCharts from './GVFWLRCharts';
 import ProductionMap from './ProductionMap';
 import CustomLineChart from './CustomLineChart';
-import { AlarmClock } from 'lucide-react';
+import { AlarmClock, Trash2 } from 'lucide-react';
 
 interface WidgetConfig {
   layoutId: string;
@@ -29,6 +30,8 @@ interface WidgetRendererProps {
   isDeviceOffline?: boolean;
   selectedDevice?: any;
   selectedHierarchy?: any;
+  onDelete?: (layoutId: string) => void;
+  isAdmin?: boolean;
 }
 
 const WidgetRenderer: React.FC<WidgetRendererProps> = ({
@@ -40,9 +43,18 @@ const WidgetRenderer: React.FC<WidgetRendererProps> = ({
   isDeviceOffline = false,
   selectedDevice,
   selectedHierarchy,
+  onDelete,
+  isAdmin = false,
 }) => {
   const { theme } = useTheme();
+  const { token } = useAuth();
   const dsConfig = widget.dataSourceConfig || {};
+
+  const handleDelete = async () => {
+    if (!onDelete || !token) return;
+    if (!confirm(`Are you sure you want to delete "${widget.name}"?`)) return;
+    onDelete(widget.layoutId);
+  };
 
   // Helper to get metric value
   const getMetricValue = (metric: string) => {
@@ -86,7 +98,20 @@ const WidgetRenderer: React.FC<WidgetRendererProps> = ({
   switch (widget.component) {
     case 'CustomLineChart':
       return (
-        <div className="h-full">
+        <div className="h-full relative">
+          {isAdmin && onDelete && (
+            <button
+              onClick={handleDelete}
+              className={`absolute top-2 right-2 z-20 p-2 rounded-lg transition-all ${
+                theme === 'dark'
+                  ? 'bg-red-600 hover:bg-red-700 text-white'
+                  : 'bg-red-500 hover:bg-red-600 text-white'
+              }`}
+              title="Delete widget"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          )}
           <CustomLineChart
             widgetConfig={widget}
             timeRange={timeRange}

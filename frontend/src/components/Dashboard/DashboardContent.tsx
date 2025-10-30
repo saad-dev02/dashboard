@@ -427,6 +427,29 @@ const DashboardContent: React.FC<DashboardContentProps> = ({
     return widgets.filter(w => w.component === 'FlowRateChart').sort((a, b) => a.displayOrder - b.displayOrder);
   };
 
+  const handleDeleteWidget = async (layoutId: string) => {
+    if (!token) return;
+
+    try {
+      const response = await fetch(`http://localhost:5000/api/widgets/remove-widget/${layoutId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        setWidgets(prevWidgets => prevWidgets.filter(w => w.layoutId !== layoutId));
+      } else {
+        alert(result.message || 'Failed to delete widget');
+      }
+    } catch (error) {
+      console.error('Failed to delete widget:', error);
+      alert('Failed to delete widget');
+    }
+  };
+
   return (
     <div
       className={`h-full p-4 overflow-y-auto ${
@@ -510,6 +533,8 @@ const DashboardContent: React.FC<DashboardContentProps> = ({
                     isDeviceOffline={metricsChartData?.device?.status === 'Offline'}
                     selectedDevice={selectedDevice}
                     selectedHierarchy={selectedHierarchy}
+                    isAdmin={userRole === 'admin'}
+                    onDelete={handleDeleteWidget}
                   />
                 )}
               </DynamicDashboard>

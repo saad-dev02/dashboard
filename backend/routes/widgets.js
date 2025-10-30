@@ -514,8 +514,10 @@ router.post('/update-layout', protect, async (req, res) => {
 router.get('/widget-data/:widgetId', protect, async (req, res) => {
   try {
     const { widgetId } = req.params;
-    const { limit = 100, timeRange = '24h' } = req.query;
+    const { limit = 200, timeRange = '24h' } = req.query;
     const companyId = req.user.company_id;
+
+    console.log(`[WIDGET DATA] Fetching data for widget ${widgetId}, timeRange: ${timeRange}`);
 
     const widgetResult = await database.query(
       `SELECT wd.data_source_config, wt.component_name, wt.name as widget_type
@@ -535,6 +537,8 @@ router.get('/widget-data/:widgetId', protect, async (req, res) => {
     const widget = widgetResult.rows[0];
     const dataSourceConfig = widget.data_source_config;
 
+    console.log('[WIDGET DATA] Widget config:', JSON.stringify(dataSourceConfig, null, 2));
+
     if (!dataSourceConfig.seriesConfig || dataSourceConfig.seriesConfig.length === 0) {
       return res.json({
         success: true,
@@ -553,6 +557,8 @@ router.get('/widget-data/:widgetId', protect, async (req, res) => {
 
     const seriesData = {};
     for (const s of dataSourceConfig.seriesConfig) {
+      console.log(`[WIDGET DATA] Loading series: ${s.displayName}, property: ${s.dataSourceProperty}, deviceTypeId: ${dataSourceConfig.deviceTypeId}`);
+
       const seriesQuery = `
         SELECT
           dd.created_at as timestamp,
@@ -575,6 +581,8 @@ router.get('/widget-data/:widgetId', protect, async (req, res) => {
         parseInt(limit)
       ]);
 
+      console.log(`[WIDGET DATA] Series ${s.displayName} returned ${seriesResult.rows.length} data points`);
+
       seriesData[s.displayName] = {
         data: seriesResult.rows.map(row => ({
           timestamp: row.timestamp,
@@ -585,6 +593,8 @@ router.get('/widget-data/:widgetId', protect, async (req, res) => {
         propertyName: s.propertyName
       };
     }
+
+    console.log(`[WIDGET DATA] Returning data with ${Object.keys(seriesData).length} series`);
 
     res.json({
       success: true,
