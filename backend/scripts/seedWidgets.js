@@ -293,12 +293,20 @@ const seedWidgets = async () => {
     ];
 
     for (const layout of layouts) {
+      const widgetDefId = widgetDefIds[layout.widget];
+
+      // Skip if widget definition doesn't exist (conditional widgets that weren't created)
+      if (!widgetDefId) {
+        console.log(`⚠️  Skipping layout for '${layout.widget}' - widget definition not found`);
+        continue;
+      }
+
       await client.query(`
         INSERT INTO dashboard_layouts (dashboard_id, widget_definition_id, layout_config, display_order)
         VALUES ($1, $2, $3, $4)
       `, [
         dashboardId,
-        widgetDefIds[layout.widget],
+        widgetDefId,
         JSON.stringify({
           x: layout.x,
           y: layout.y,
